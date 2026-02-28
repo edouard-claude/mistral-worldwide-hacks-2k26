@@ -11,11 +11,10 @@ import (
 	"time"
 )
 
-const mistralURL = "MISTRAL_URL_PLACEHOLDER"
-
 // MistralClient handles communication with the Mistral API
 type MistralClient struct {
 	apiKey     string
+	baseURL    string
 	httpClient *http.Client
 	timeout    time.Duration
 }
@@ -46,11 +45,17 @@ type MistralResponse struct {
 
 // NewMistralClient creates a new Mistral API client
 func NewMistralClient(timeout time.Duration) (*MistralClient, error) {
+	baseURL := os.Getenv("MISTRAL_URL")
+	if baseURL == "" {
+		return nil, fmt.Errorf("MISTRAL_URL environment variable is required")
+	}
+
 	// API key is optional - if set, it will be used in Authorization header
 	apiKey := os.Getenv("MISTRAL_API_KEY")
 
 	return &MistralClient{
-		apiKey: apiKey,
+		apiKey:  apiKey,
+		baseURL: baseURL,
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
@@ -75,7 +80,7 @@ func (c *MistralClient) Complete(ctx context.Context, systemPrompt, userPrompt s
 		return "", fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", mistralURL, bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}

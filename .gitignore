@@ -1,0 +1,6 @@
+_bmad*
+.claude
+.DS_Store
+.env
+.fak
+swarm/fakenews-arena

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/nats-io/nats.go"
 )
 
@@ -27,6 +28,9 @@ func isValidSessionID(sessionID string) bool {
 }
 
 func main() {
+	// Load .env file (optional, ignores if not found)
+	_ = godotenv.Load()
+
 	// Parse command line arguments
 	natsURL := flag.String("nats-url", "nats://demo.nats.io:4222", "NATS server URL")
 	timeout := flag.Duration("timeout", 30*time.Second, "Timeout per Mistral API call")
