@@ -1,0 +1,94 @@
+{
+  "session_id": "6a5681f8-ff9d-431f-907c-27be8e7db67e",
+  "fake_news": "Face à la douceur des températures, le gouvernement annonce l’activation du Plan Grand Tiède",
+  "round": 5,
+  "phase": 0,
+  "agents": [
+    {
+      "id": "5e5e748d-d339-49b0-9ab4-1ddf8053773e",
+      "name": "Aria",
+      "political_color": 0.8,
+      "temperature": 0.5,
+      "confidence": 4,
+      "alive": true,
+      "parent_id": "62707962-26af-48c6-b9e6-e4e49d0b229f",
+      "born_at_round": 3
+    },
+    {
+      "id": "bb7a2045-16c9-4b54-b669-11ade210499b",
+      "name": "Dante",
+      "political_color": 0.75,
+      "temperature": 0.5,
+      "confidence": 2,
+      "alive": true,
+      "parent_id": "62707962-26af-48c6-b9e6-e4e49d0b229f",
+      "born_at_round": 2
+    },
+    {
+      "id": "f2a57b71-9223-4efe-83cf-152c764d10e6",
+      "name": "Nova",
+      "political_color": 0.85,
+      "temperature": 0.5,
+      "confidence": 1,
+      "alive": true,
+      "parent_id": "32ee12be-dc58-4618-b740-66c755a1ac19",
+      "born_at_round": 5
+    },
+    {
+      "id": "32ee12be-dc58-4618-b740-66c755a1ac19",
+      "name": "Felix",
+      "political_color": 0.8,
+      "temperature": 0.5,
+      "confidence": 1,
+      "alive": true,
+      "parent_id": "62707962-26af-48c6-b9e6-e4e49d0b229f",
+      "born_at_round": 4
+    }
+  ],
+  "graveyard": [
+    {
+      "id": "b16cda42-fa9a-4502-a766-521ff5c963e2",
+      "name": "Elena",
+      "political_color": 0.3,
+      "temperature": 0.5,
+      "confidence": 1,
+      "alive": false,
+      "born_at_round": 1,
+      "died_at_round": 1,
+      "death_cause": "eliminated_round_1"
+    },
+    {
+      "id": "6ca14a96-f77f-4688-be94-e69a57ffecad",
+      "name": "Marcus",
+      "political_color": 0.05,
+      "temperature": 0.7,
+      "confidence": 5,
+      "alive": false,
+      "born_at_round": 1,
+      "died_at_round": 2,
+      "death_cause": "eliminated_round_2"
+    },
+    {
+      "id": "ef881b5a-4d36-4c5c-9363-c5ad07bbba0e",
+      "name": "Luna",
+      "political_color": 0.94,
+      "temperature": 0.7,
+      "confidence": 4,
+      "alive": false,
+      "born_at_round": 1,
+      "died_at_round": 3,
+      "death_cause": "eliminated_round_3"
+    },
+    {
+      "id": "62707962-26af-48c6-b9e6-e4e49d0b229f",
+      "name": "Victor",
+      "political_color": 0.75,
+      "temperature": 0.5,
+      "confidence": 3,
+      "alive": false,
+      "born_at_round": 1,
+      "died_at_round": 4,
+      "death_cause": "eliminated_round_4"
+    }
+  ]
+}

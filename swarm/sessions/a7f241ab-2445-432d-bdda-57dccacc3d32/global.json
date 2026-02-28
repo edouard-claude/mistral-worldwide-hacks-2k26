@@ -1,0 +1,94 @@
+{
+  "session_id": "a7f241ab-2445-432d-bdda-57dccacc3d32",
+  "fake_news": "La préfecture du Rhône scandalisée par la présence de néonazis à un rassemblement de néonazis",
+  "round": 5,
+  "phase": 0,
+  "agents": [
+    {
+      "id": "8d970f50-e836-494b-8c8f-8305307b8952",
+      "name": "Dante",
+      "political_color": 0.85,
+      "temperature": 0.5,
+      "confidence": 5,
+      "alive": true,
+      "parent_id": "f1c9e1d9-02ad-4926-a921-9fe36dbe7d29",
+      "born_at_round": 2
+    },
+    {
+      "id": "9678be2c-6391-4643-8dee-40099804a7df",
+      "name": "Nova",
+      "political_color": 0.85,
+      "temperature": 0.5,
+      "confidence": 4,
+      "alive": true,
+      "parent_id": "8d970f50-e836-494b-8c8f-8305307b8952",
+      "born_at_round": 5
+    },
+    {
+      "id": "017ee088-8400-4d9e-8253-2880041899e8",
+      "name": "Felix",
+      "political_color": 0.85,
+      "temperature": 0.5,
+      "confidence": 4,
+      "alive": true,
+      "parent_id": "8d970f50-e836-494b-8c8f-8305307b8952",
+      "born_at_round": 4
+    },
+    {
+      "id": "5be76698-7579-49cc-ada4-30d25eb5b126",
+      "name": "Luna",
+      "political_color": 0.95,
+      "temperature": 0.7,
+      "confidence": 5,
+      "alive": true,
+      "born_at_round": 1
+    }
+  ],
+  "graveyard": [
+    {
+      "id": "701a0cda-7d83-48be-8cfc-6fc71f34652c",
+      "name": "Marcus",
+      "political_color": 0.05,
+      "temperature": 0.7,
+      "confidence": 4,
+      "alive": false,
+      "born_at_round": 1,
+      "died_at_round": 1,
+      "death_cause": "eliminated_round_1"
+    },
+    {
+      "id": "9c7b3810-1321-410e-a914-2ab07226a44a",
+      "name": "Elena",
+      "political_color": 0.3,
+      "temperature": 0.5,
+      "confidence": 1,
+      "alive": false,
+      "born_at_round": 1,
+      "died_at_round": 2,
+      "death_cause": "eliminated_round_2"
+    },
+    {
+      "id": "f1c9e1d9-02ad-4926-a921-9fe36dbe7d29",
+      "name": "Victor",
+      "political_color": 0.75,
+      "temperature": 0.5,
+      "confidence": 1,
+      "alive": false,
+      "born_at_round": 1,
+      "died_at_round": 3,
+      "death_cause": "eliminated_round_3"
+    },
+    {
+      "id": "d194c579-ca8a-4ae7-8371-170126b446be",
+      "name": "Aria",
+      "political_color": 0.85,
+      "temperature": 0.5,
+      "confidence": 5,
+      "alive": false,
+      "parent_id": "f1c9e1d9-02ad-4926-a921-9fe36dbe7d29",
+      "born_at_round": 3,
+      "died_at_round": 4,
+      "death_cause": "eliminated_round_4"
+    }
+  ]
+}

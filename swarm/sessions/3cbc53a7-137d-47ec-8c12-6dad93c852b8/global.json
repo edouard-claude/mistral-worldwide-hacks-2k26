@@ -1,0 +1,94 @@
+{
+  "session_id": "3cbc53a7-137d-47ec-8c12-6dad93c852b8",
+  "fake_news": "La préfecture du Rhône scandalisée par la présence de néonazis à un rassemblement de néonazis",
+  "round": 5,
+  "phase": 0,
+  "agents": [
+    {
+      "id": "426d29a9-0b4f-45ec-afc0-04fd0ed86073",
+      "name": "Aria",
+      "political_color": 0.85,
+      "temperature": 0.5,
+      "confidence": 5,
+      "alive": true,
+      "parent_id": "526c42ac-b7b8-4424-a8f0-9025a942a583",
+      "born_at_round": 3
+    },
+    {
+      "id": "a12d8471-e440-4e6a-b9e1-a7cd9da42076",
+      "name": "Felix",
+      "political_color": 0.82,
+      "temperature": 0.5,
+      "confidence": 1,
+      "alive": true,
+      "parent_id": "ca4ce19f-6961-45c6-959f-07ccc8d09104",
+      "born_at_round": 4
+    },
+    {
+      "id": "526c42ac-b7b8-4424-a8f0-9025a942a583",
+      "name": "Victor",
+      "political_color": 0.85,
+      "temperature": 0.5,
+      "confidence": 5,
+      "alive": true,
+      "born_at_round": 1
+    },
+    {
+      "id": "f705d277-e1ae-4b82-864a-61e3b5f212e3",
+      "name": "Nova",
+      "political_color": 0.85,
+      "temperature": 0.5,
+      "confidence": 4,
+      "alive": true,
+      "parent_id": "426d29a9-0b4f-45ec-afc0-04fd0ed86073",
+      "born_at_round": 5
+    }
+  ],
+  "graveyard": [
+    {
+      "id": "f0e60245-4dcd-4f36-a207-eff326237c54",
+      "name": "Luna",
+      "political_color": 0.95,
+      "temperature": 0.7,
+      "confidence": 4,
+      "alive": false,
+      "born_at_round": 1,
+      "died_at_round": 1,
+      "death_cause": "eliminated_round_1"
+    },
+    {
+      "id": "e0b3e03e-b979-44d0-97bd-4b39d6fb2404",
+      "name": "Marcus",
+      "political_color": 0.05,
+      "temperature": 0.7,
+      "confidence": 4,
+      "alive": false,
+      "born_at_round": 1,
+      "died_at_round": 2,
+      "death_cause": "eliminated_round_2"
+    },
+    {
+      "id": "37a82c5a-5829-499a-a31d-fc330c43d9f2",
+      "name": "Elena",
+      "political_color": 0.3,
+      "temperature": 0.5,
+      "confidence": 1,
+      "alive": false,
+      "born_at_round": 1,
+      "died_at_round": 3,
+      "death_cause": "eliminated_round_3"
+    },
+    {
+      "id": "ca4ce19f-6961-45c6-959f-07ccc8d09104",
+      "name": "Dante",
+      "political_color": 0.85,
+      "temperature": 0.5,
+      "confidence": 1,
+      "alive": false,
+      "parent_id": "526c42ac-b7b8-4424-a8f0-9025a942a583",
+      "born_at_round": 2,
+      "died_at_round": 4,
+      "death_cause": "eliminated_round_4"
+    }
+  ]
+}
