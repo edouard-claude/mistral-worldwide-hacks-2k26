@@ -388,6 +388,7 @@ function dispatchWsEvent(
     }
 
     // Vision update
+    case "gm.vision_update":
     case "vision_update": {
       const content = (data.content || String(data)).replace(/\\n/g, "\n");
       dispatch({

@@ -295,6 +295,10 @@ export function gameReducer(state: FullGameState, action: GameAction): FullGameS
 
     case "SESSION_START": {
       newsImageIdx = 0; // Reset image counter
+      if (!action.agents || !Array.isArray(action.agents)) {
+        console.warn("[SESSION_START] Invalid action, no agents array:", action);
+        return state;
+      }
       const agents = action.agents.map(mapAgent);
       const indices = mapIndices(
         { ...action.indices, rage: 0, credibilite: 100 },
@@ -630,7 +634,13 @@ export function gameReducer(state: FullGameState, action: GameAction): FullGameS
 
     case "ARENA_GLOBAL_STATE": {
       // Replace all agents with swarm agents
-      const swarmAgents = action.payload.agents.map(mapSwarmAgent);
+      // Defensive: payload may be nested in data or have different structure
+      const agents = action.payload.agents || (action.payload as any).data?.agents;
+      if (!agents || !Array.isArray(agents)) {
+        console.warn("[ARENA_GLOBAL_STATE] Invalid payload, no agents array:", action.payload);
+        return state;
+      }
+      const swarmAgents = agents.map(mapSwarmAgent);
       return {
         ...state,
         liveAgents: swarmAgents,
