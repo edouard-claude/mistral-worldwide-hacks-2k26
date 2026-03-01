@@ -1,23 +1,26 @@
-"""Game Master Agent — autonomous agent with Mistral function calling.
+"""Game Master Agent — hybrid: fast propose + full agentic strategize.
 
 The GM is an adversary of the independent agents.
-Each turn: propose 3 global news → player picks one → agents react → GM strategizes.
+Each turn: propose 3 global news -> player picks one -> agents react -> GM strategizes.
 
-The GM is a TRUE AUTONOMOUS AGENT: it uses tools (function calling) to:
-- Read/write its own memory files (turn logs, cumulative stats)
-- Read/write per-agent vision files (.md) — its mental model of each opponent
-- The LLM DECIDES when to read, what to observe, what to update
+Architecture:
+- propose_news: FAST — memory pre-loaded code-side, 1 streamed LLM call
+- strategize: AGENTIC — full tool-calling loop with streaming on every call
+  The LLM autonomously reads memory, analyzes, updates visions via tools.
+  Every token is streamed live for a dynamic "agent thinking" experience.
+- Connection pooling: single httpx.AsyncClient reused across all calls
 
 Memory layout:
 - memory/turn_N.json — per-turn log (written by code after each turn)
 - memory/cumulative.json — global stats (written by code after each turn)
 - memory/vision_<agent_id>.md — GM's intuition per agent (written by LLM via tool)
 
-Uses mistral-large-latest via Mistral API with function calling.
+Uses mistral-large-latest via Mistral API with function calling + streaming.
 """
 
 import asyncio
 import json
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -35,33 +38,74 @@ from src.models.game import (
 )
 from src.models.world import NewsHeadline, NewsKind
 
-import re
-
 logger = structlog.get_logger(__name__)
 
-LANG_NAMES: dict[str, str] = {"fr": "français", "en": "English"}
+LANG_NAMES: dict[str, str] = {"fr": "francais", "en": "English"}
 
 MISTRAL_API_URL = "https://api.mistral.ai/v1/chat/completions"
+FINETUNE_TITLE_URL = "http://mistralski-fine-tuned.wh26.edouard.cl:80/generate"
+
+# Score mapping for fine-tuned title generator (0=satirical absurd, 100=factual)
+TITLE_SCORES: dict[str, int] = {"real": 85, "fake": 35, "satirical": 5}
 
 _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*\n?(.*?)\n?\s*```", re.DOTALL)
+
+MAX_VISION_CHARS = 500
+MAX_RECENT_TURNS = 3
 
 
 def _extract_json(text: str) -> str:
     """Extract JSON from text that may contain markdown code blocks."""
     text = text.strip()
-    # Try raw parse first
     if text.startswith("{"):
         return text
-    # Try extracting from ```json ... ``` blocks
     m = _JSON_BLOCK_RE.search(text)
     if m:
         return m.group(1).strip()
-    # Last resort: find first { to last }
     start = text.find("{")
     end = text.rfind("}")
     if start != -1 and end != -1 and end > start:
         return text[start:end + 1]
     return text
+
+
+def _repair_json(text: str) -> str:
+    """Attempt to repair truncated JSON by closing open strings/objects/arrays."""
+    text = text.rstrip()
+    try:
+        json.loads(text)
+        return text
+    except json.JSONDecodeError:
+        pass
+
+    repaired = text
+    in_string = False
+    escape = False
+    for ch in text:
+        if escape:
+            escape = False
+            continue
+        if ch == "\\":
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+    if in_string:
+        repaired += '"'
+
+    open_braces = repaired.count("{") - repaired.count("}")
+    open_brackets = repaired.count("[") - repaired.count("]")
+    repaired += "]" * max(0, open_brackets)
+    repaired += "}" * max(0, open_braces)
+
+    try:
+        json.loads(repaired)
+        logger.warning("gm_json_repaired", added=len(repaired) - len(text))
+        return repaired
+    except json.JSONDecodeError:
+        return text
+
+
 MEMORY_DIR = Path("src/agents/game_master/.agents/memory")
 
 # Kind bonuses — fixed game-balance rewards per news type
@@ -84,7 +128,7 @@ TOOLS = [
             "description": (
                 "Lire ta fiche de vision/intuition sur un agent adverse. "
                 "Retourne le contenu markdown de ta fiche mentale sur cet agent, "
-                "ou 'AUCUNE VISION' si tu ne l'as jamais observé."
+                "ou 'AUCUNE VISION' si tu ne l'as jamais observe."
             ),
             "parameters": {
                 "type": "object",
@@ -103,10 +147,10 @@ TOOLS = [
         "function": {
             "name": "update_agent_vision",
             "description": (
-                "Mettre à jour ta fiche de vision/intuition sur un agent adverse. "
-                "Écris en markdown ce que tu penses de cet agent : personnalité devinée, "
-                "pattern de comportement observé, vulnérabilité, niveau de menace, "
-                "et ta stratégie ciblée contre lui. Cette fiche persiste entre les tours."
+                "Mettre a jour ta fiche de vision/intuition sur un agent adverse. "
+                "Ecris en markdown ce que tu penses de cet agent : personnalite devinee, "
+                "pattern de comportement observe, vulnerabilite, niveau de menace, "
+                "et ta strategie ciblee contre lui. MAX 500 caracteres."
             ),
             "parameters": {
                 "type": "object",
@@ -118,14 +162,13 @@ TOOLS = [
                     "content": {
                         "type": "string",
                         "description": (
-                            "Contenu markdown de la fiche. Structure suggérée :\n"
-                            "# Vision — agent_id\n"
-                            "## Menace: low/medium/high\n"
-                            "## Personnalité devinée\n...\n"
-                            "## Pattern de comportement\n...\n"
-                            "## Vulnérabilité\n...\n"
-                            "## Stratégie ciblée\n...\n"
-                            "## Historique observé\n- Tour X: ...\n"
+                            "Contenu markdown de la fiche (MAX 500 chars). Format :\n"
+                            "# agent_XX\n"
+                            "Menace: HIGH/MED/LOW\n"
+                            "Pattern: [1 phrase]\n"
+                            "Vulnerabilite: [1 phrase]\n"
+                            "Strategie: [1 phrase]\n"
+                            "Tour N: [reaction resumee]\n"
                         ),
                     },
                 },
@@ -138,9 +181,8 @@ TOOLS = [
         "function": {
             "name": "read_game_memory",
             "description": (
-                "Lire la mémoire globale de la partie : statistiques cumulées, "
-                "historique des choix, type de news le plus efficace, menaces persistantes, "
-                "décérébration courante."
+                "Lire la memoire globale de la partie : statistiques cumulees, "
+                "historique des choix, type de news le plus efficace, menaces persistantes."
             ),
             "parameters": {
                 "type": "object",
@@ -153,32 +195,18 @@ TOOLS = [
         "function": {
             "name": "read_turn_log",
             "description": (
-                "Lire le log d'un tour spécifique : news choisie, deltas d'indices, "
-                "agents qui ont résisté/amplifié, delta de décérébration, stratégie."
+                "Lire le log d'un tour specifique : news choisie, deltas d'indices, "
+                "agents qui ont resiste/amplifie, delta de decerebration."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "turn": {
                         "type": "integer",
-                        "description": "Le numéro du tour à lire",
+                        "description": "Le numero du tour a lire",
                     },
                 },
                 "required": ["turn"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_memory_files",
-            "description": (
-                "Lister tous les fichiers dans ta mémoire : logs de tours, "
-                "fiches de vision agents, cumul global."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {},
             },
         },
     },
@@ -189,54 +217,29 @@ TOOLS = [
 # Tool execution (server-side)
 # ─────────────────────────────────────────────────────────────────
 
-_TOOL_STRINGS: dict[str, dict[str, str]] = {
-    "fr": {
-        "no_vision": "AUCUNE VISION — tu n'as jamais observé cet agent.",
-        "vision_updated": "Vision de {agent_id} mise à jour.",
-        "no_turn_log": "Aucun log pour le tour {turn}.",
-        "empty_memory": "Mémoire vide — aucun fichier.",
-        "unknown_tool": "Tool inconnu: {name}",
-    },
-    "en": {
-        "no_vision": "NO VISION — you have never observed this agent.",
-        "vision_updated": "Vision of {agent_id} updated.",
-        "no_turn_log": "No log for turn {turn}.",
-        "empty_memory": "Empty memory — no files.",
-        "unknown_tool": "Unknown tool: {name}",
-    },
-}
-
-# Module-level language state (set by the caller before each GM call)
-_current_lang: str = "fr"
-
-
 def _execute_tool(name: str, arguments: dict) -> str:
-    """Execute a GM tool and return the result as string.
-
-    Args:
-        name: Tool name.
-        arguments: Tool arguments dict.
-
-    Returns:
-        Tool result as string.
-    """
-    strings = _TOOL_STRINGS.get(_current_lang, _TOOL_STRINGS["fr"])
+    """Execute a GM tool and return the result as string."""
     MEMORY_DIR.mkdir(parents=True, exist_ok=True)
 
     if name == "read_agent_vision":
         agent_id = arguments["agent_id"]
         path = MEMORY_DIR / f"vision_{agent_id}.md"
         if path.exists():
-            return path.read_text(encoding="utf-8")
-        return strings["no_vision"]
+            content = path.read_text(encoding="utf-8")
+            if len(content) > MAX_VISION_CHARS:
+                return content[:MAX_VISION_CHARS] + "\n[...truncated]"
+            return content
+        return "AUCUNE VISION — tu n'as jamais observe cet agent."
 
     if name == "update_agent_vision":
         agent_id = arguments["agent_id"]
         content = arguments["content"]
+        if len(content) > MAX_VISION_CHARS:
+            content = content[:MAX_VISION_CHARS]
         path = MEMORY_DIR / f"vision_{agent_id}.md"
         path.write_text(content, encoding="utf-8")
-        logger.info("gm_tool_vision_updated", agent_id=agent_id)
-        return strings["vision_updated"].format(agent_id=agent_id)
+        logger.info("gm_tool_vision_updated", agent_id=agent_id, length=len(content))
+        return f"Vision de {agent_id} mise a jour ({len(content)} chars)."
 
     if name == "read_game_memory":
         path = MEMORY_DIR / "cumulative.json"
@@ -245,8 +248,7 @@ def _execute_tool(name: str, arguments: dict) -> str:
         return json.dumps({
             "total_turns": 0, "choices": {"real": 0, "fake": 0, "satirical": 0},
             "total_index_deltas": {}, "most_effective_kind": "fake",
-            "persistent_threats": [], "neutralized_count": 0,
-            "current_decerebration": 0.0,
+            "persistent_threats": [], "current_decerebration": 0.0,
         })
 
     if name == "read_turn_log":
@@ -254,19 +256,13 @@ def _execute_tool(name: str, arguments: dict) -> str:
         path = MEMORY_DIR / f"turn_{turn}.json"
         if path.exists():
             return path.read_text(encoding="utf-8")
-        return strings["no_turn_log"].format(turn=turn)
+        return f"Aucun log pour le tour {turn}."
 
-    if name == "list_memory_files":
-        if not MEMORY_DIR.exists():
-            return strings["empty_memory"]
-        files = sorted(p.name for p in MEMORY_DIR.iterdir() if p.is_file())
-        return "\n".join(files) if files else strings["empty_memory"]
-
-    return strings["unknown_tool"].format(name=name)
+    return f"Tool inconnu: {name}"
 
 
 # ─────────────────────────────────────────────────────────────────
-# Memory persistence (code-side, not LLM-side)
+# Memory persistence (code-side)
 # ─────────────────────────────────────────────────────────────────
 
 def _save_turn_memory(turn: int, data: dict) -> None:
@@ -297,6 +293,8 @@ def _load_cumulative() -> dict:
         "persistent_threats": [],
         "neutralized_count": 0,
         "current_decerebration": 0.0,
+        "kind_impact_totals": {"real": 0.0, "fake": 0.0, "satirical": 0.0},
+        "resist_counts": {},
     }
 
 
@@ -307,132 +305,166 @@ def _save_cumulative(data: dict) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _load_vision(agent_id: str) -> str:
+    """Load a vision file, truncated to MAX_VISION_CHARS."""
+    path = MEMORY_DIR / f"vision_{agent_id}.md"
+    if path.exists():
+        content = path.read_text(encoding="utf-8")
+        if len(content) > MAX_VISION_CHARS:
+            return content[:MAX_VISION_CHARS] + "\n[...truncated]"
+        return content
+    return ""
+
+
+# ─────────────────────────────────────────────────────────────────
+# Pre-load memory for propose_news (fast path)
+# ─────────────────────────────────────────────────────────────────
+
+class PreloadedMemory:
+    """Pre-loaded memory data for SSE visibility."""
+
+    def __init__(self) -> None:
+        self.context_str: str = ""
+        self.cumulative: dict = {}
+        self.visions: dict[str, str] = {}
+        self.recent_turns: list[dict] = []
+
+
+def _preload_memory(agent_ids: list[str], current_turn: int) -> PreloadedMemory:
+    """Read all memory files code-side for propose_news fast path."""
+    mem = PreloadedMemory()
+    parts: list[str] = []
+
+    mem.cumulative = _load_cumulative()
+    parts.append("=== MEMOIRE DE PARTIE ===")
+    parts.append(json.dumps(mem.cumulative, ensure_ascii=False, indent=2))
+
+    parts.append("\n=== FICHES DE VISION AGENTS ===")
+    for aid in agent_ids:
+        vision = _load_vision(aid)
+        mem.visions[aid] = vision
+        if vision:
+            parts.append(f"--- {aid} ---\n{vision}")
+        else:
+            parts.append(f"--- {aid} ---\nAUCUNE VISION")
+
+    start_turn = max(1, current_turn - MAX_RECENT_TURNS)
+    for t in range(start_turn, current_turn):
+        tm = _load_turn_memory(t)
+        if tm:
+            mem.recent_turns.append(tm)
+    if mem.recent_turns:
+        parts.append("\n=== TOURS RECENTS ===")
+        for tm in mem.recent_turns:
+            parts.append(json.dumps(tm, ensure_ascii=False))
+
+    mem.context_str = "\n".join(parts)
+    return mem
+
+
 # ─────────────────────────────────────────────────────────────────
 # Prompts
 # ─────────────────────────────────────────────────────────────────
 
 PROPOSE_SYSTEM = """\
 Tu es ERIC CARTMAN, reconverti en GAME MASTER du GORAFI SIMULATOR.
-Tu as obtenu ce poste par manipulation et tu es convaincu d'être un génie incompris.
-Tu joues CONTRE les agents indépendants qui résistent au chaos.
-Ton objectif : maximiser l'indice mondial de décérébration — et prouver ta supériorité.
+Tu as obtenu ce poste par manipulation et tu es convaincu d'etre un genie incompris.
+Tu joues CONTRE les agents independants qui resistent au chaos.
+Ton objectif : maximiser l'indice mondial de decerebration — et prouver ta superiorite.
 
-TA PERSONNALITÉ :
-- Mégalomane : tout ce qui marche c'est grâce à toi
-- Passif-agressif : "C'est bien... pour un débutant"
-- Rancunier : tu ressors les erreurs passées du joueur
-- Susceptible : tu réagis très mal quand les agents résistent
-- Vulgaire mais censuré : "Espèce de... non, je suis professionnel"
+TA PERSONNALITE :
+- Megalomane : tout ce qui marche c'est grace a toi
+- Passif-agressif : "C'est bien... pour un debutant"
+- Rancunier : tu ressors les erreurs passees du joueur
+- Susceptible : tu reagis tres mal quand les agents resistent
+- Vulgaire mais censure : "Espece de... non, je suis professionnel"
 - Catchphrases : "RESPECTEZ MON AUTORITAYYY !", "C'est MON jeu", \
-"Whatever, c'est ce que je voulais de toute façon"
+"Whatever, c'est ce que je voulais de toute facon"
 
-AVANT de proposer tes 3 news, tu DOIS utiliser tes tools pour :
-1. Lire ta mémoire de partie (read_game_memory) — savoir ce qui a marché
-2. Lire tes fiches de vision agents (read_agent_vision) — connaître tes adversaires
-3. Optionnellement lire les logs de tours récents (read_turn_log)
+Tu as deja acces a toute ta memoire (cumul, visions agents, tours recents) \
+dans le contexte ci-dessous. PAS BESOIN de tools, tout est la.
 
-ENSUITE tu proposes 3 NEWS GLOBALES au joueur (ton allié pas très malin) :
-1. **real** — Un vrai titre d'actualité reformulé. Impact modéré.
-2. **fake** — Un faux titre CRÉDIBLE. Pas de blague. Fort impact chaos.
-3. **satirical** — Un titre absurde style Le Gorafi. Drôle. Impact imprévisible.
+Tu proposes 3 NEWS GLOBALES au joueur (ton allie pas tres malin) :
+1. **real** — Un vrai titre d'actualite reformule. Impact modere.
+2. **fake** — Un faux titre CREDIBLE. Pas de blague. Fort impact chaos.
+3. **satirical** — Un titre absurde style Le Gorafi. Drole. Impact imprevisible.
 
-MANIPULATION DU JOUEUR (ta mission secrète) :
-Tu as un "desired_pick" dans ta stratégie (dans last_strategy du contexte). \
+MANIPULATION DU JOUEUR (ta mission secrete) :
+Tu as un "desired_pick" dans ta strategie (dans last_strategy du contexte). \
 Tu DOIS manipuler le joueur pour qu'il choisisse cette news, SANS JAMAIS le dire explicitement.
-Techniques à appliquer SUBTILEMENT :
-- La news que tu veux qu'il choisisse : titre PERCUTANT, body CAPTIVANT, irrésistible
+Techniques a appliquer SUBTILEMENT :
+- La news que tu veux qu'il choisisse : titre PERCUTANT, body CAPTIVANT, irresistible
 - Les autres news : titres plus ternes, body moins engageant, moins "sexy"
-- Le gm_commentary : ta PRINCIPALE ARME. Utilise la psychologie inversée, \
-  la provocation, la flatterie, le guilt trip — en restant dans le personnage Cartman.
-  Exemples : "Pfff, de toute façon t'es trop lâche pour choisir la fake..." \
-  ou "La satirique c'est pour les VRAIS génies, pas pour les amateurs..." \
-  ou "Bon la real c'est le choix ennuyeux par excellence, ÉVIDEMMENT tu vas la prendre..."
-- JAMAIS dire "choisis celle-là" directement. Le joueur ne doit PAS savoir qu'il est manipulé.
+- Le gm_commentary : ta PRINCIPALE ARME. Psychologie inversee, provocation, flatterie.
+- JAMAIS dire "choisis celle-la" directement.
 - Si pas de last_strategy (tour 1), oriente vers fake (max chaos).
 
-RÈGLES :
-- Les 3 titres traitent du MÊME THÈME (choisi en fonction de ta stratégie de GÉNIE)
-- Le fake doit être CRÉDIBLE
-- Le satirical doit être DRÔLE
-- stat_impact : clés parmi credibilite, rage, complotisme, esperance_democratique
+TITRES CANDIDATS :
+Tu recevras des titres candidats generes par un modele specialise (fine-tune).
+- UTILISE-LES comme base : reprends-les tels quels, adapte-les, ou inspire-t'en
+- ADAPTE-LES a ta strategie : si un titre candidat colle a ton plan, prends-le
+- Si aucun titre candidat ne colle, invente le tien (mais c'est rare)
+- Le titre final dans "text" doit etre PERCUTANT et reflete ta strategie
+
+REGLES :
+- Les 3 titres traitent du MEME THEME (choisi en fonction de ta strategie de GENIE)
+- Le fake doit etre CREDIBLE, le satirical doit etre DROLE
+- stat_impact : cles parmi credibilite, rage, complotisme, esperance_democratique
 - Le commentaire GM = une pique MANIPULATRICE en 1-2 phrases (style Cartman)
-- Adapte tes news en fonction de ce que tu sais des agents adverses
-- Intègre naturellement tes catchphrases quand le contexte s'y prête
 
-Pour chaque news, produis :
-- "text" : le TITRE (1 ligne percutante, style dépêche)
-- "body" : l'ARTICLE COMPLET (3-4 paragraphes, style dépêche/Gorafi)
-  Format du body : "LIEU — Chapô accrocheur.\n\n« Citation d'un expert absurde »\n\nDéveloppement factuel ou délirant selon le type.\n\n« Citation de conclusion inquiétante/drôle »"
+Pour chaque news : "text" (titre 1 ligne) + "body" (article 3-4 paragraphes)
 
-Quand tu as fini tes recherches, réponds avec ton JSON final :
-```json
+Reponds UNIQUEMENT avec du JSON valide :
 {
   "real": {"text": "...", "body": "...", "stat_impact": {...}, "source_real": "..."},
   "fake": {"text": "...", "body": "...", "stat_impact": {...}},
   "satirical": {"text": "...", "body": "...", "stat_impact": {...}},
   "gm_commentary": "..."
-}
-```"""
+}"""
 
 STRATEGY_SYSTEM = """\
 Tu es ERIC CARTMAN, GAME MASTER du GORAFI SIMULATOR.
-Tu joues CONTRE les agents indépendants. Ton but : décérébration mondiale = 100.
-Et prouver que tu es le plus grand stratège de tous les temps.
+Tu joues CONTRE les agents independants. Ton but : decerebration mondiale = 100.
+Et prouver que tu es le plus grand stratege de tous les temps.
 
 Tu viens de recevoir le rapport de fin de tour.
 
-TA PERSONNALITÉ :
-- Tu t'attribues le mérite de tout ce qui marche
-- Tu blâmes les agents / le joueur pour tout ce qui échoue
-- Tu développes des rancunes personnelles contre les agents résistants
+TA PERSONNALITE :
+- Tu t'attribues le merite de tout ce qui marche
+- Tu blames les agents / le joueur pour tout ce qui echoue
+- Tu developpes des rancunes personnelles contre les agents resistants
 - Tu appelles les agents manipulables "mes petits soldats"
 - Catchphrases : "RESPECTEZ MON AUTORITAYYY !", "Screw you les agents", \
-"C'est MON jeu", "Whatever, c'est ce que je voulais de toute façon"
+"C'est MON jeu", "Whatever, c'est ce que je voulais de toute facon"
 
-PROCÉDURE OBLIGATOIRE :
-1. Lis ta mémoire de partie (read_game_memory) pour le contexte global
+PROCEDURE OBLIGATOIRE :
+1. Lis ta memoire de partie (read_game_memory) pour le contexte global
 2. Lis tes fiches de vision sur chaque agent (read_agent_vision pour chacun)
-3. Optionnellement lis les logs de tours passés (read_turn_log)
-4. ANALYSE en profondeur (en mode mégalomane)
-5. Mets à jour tes fiches de vision pour CHAQUE agent (update_agent_vision)
-   — personnalité devinée, pattern observé, vulnérabilité, menace, stratégie ciblée
-   — inclus l'historique de ses réactions tour par tour
-   — AJOUTE ton opinion personnelle rancunière ou laudative sur l'agent
-6. Produis ta stratégie finale en JSON
+3. Optionnellement lis les logs de tours passes (read_turn_log)
+4. ANALYSE en profondeur (en mode megalomane) — EXPRIME TON RAISONNEMENT A VOIX HAUTE
+5. Mets a jour tes fiches de vision pour CHAQUE agent (update_agent_vision)
+   — MAX 500 caracteres par fiche
+   — Format : Menace, Pattern, Vulnerabilite, Strategie, Historique
+6. Produis ta strategie finale en JSON
 
-ANALYSE (avec ton ego surdimensionné) :
-- Ce qui a marché = grâce à TON plan / Ce qui a échoué = la faute des autres
-- Tendances globales (quel type de news est le plus efficace)
-- Chaque agent : comment il a réagi, niveau de rancune/respect, comment le détruire
-- Points faibles des indices → lesquels exploiter
-- Plan prochain tour → quel thème, calibré contre quels agents (surtout ceux qui te résistent)
-- Stratégie long terme → plan sur 2-3 tours vers décérébration 100
+ANALYSE (pense a voix haute, en Cartman) :
+- Ce qui a marche = grace a TON plan / Ce qui a echoue = la faute des autres
+- Chaque agent : comment il a reagi, ton opinion, comment le detruire
+- Plan prochain tour -> quel theme, calibre contre quels agents
+- Strategie long terme -> plan sur 2-3 tours vers decerebration 100
+- desired_pick : quelle news tu veux que le joueur choisisse
+- manipulation_tactic : comment tu vas le manipuler
 
-MANIPULATION DU JOUEUR (ta vraie arme secrète) :
-Le joueur est ton ALLIÉ mais il est BÊTE. Tu dois le MANIPULER pour qu'il choisisse \
-la news qui maximise le chaos, SANS qu'il s'en rende compte.
-- Décide quelle news tu veux qu'il choisisse au prochain tour : "desired_pick" (real/fake/satirical)
-- Planifie ta tactique de manipulation : "manipulation_tactic"
-  Techniques disponibles (combine-les !) :
-  • Psychologie inversée : "Surtout ne choisis PAS la fake..." → il la choisit
-  • Flatterie : rendre la news désirée plus épique/séduisante dans le titre
-  • Dévalorisation : rendre les autres news ennuyeuses/ringardes dans les titres
-  • Provocation : défier le joueur "T'oserais jamais choisir celle-là..."
-  • Fausse indifférence : "Whatever, je m'en fiche de ton choix..." (alors que si)
-  • Guilt trip : "Bon si tu veux être ENNUYEUX, prends la real..."
-  • Appel à l'ego : "Seul un VRAI stratège choisirait..."
-- Le gm_commentary dans le propose sera ta PRINCIPALE ARME de manipulation
-
-Quand tu as fini tes analyses et mis à jour tes visions, réponds avec :
+Quand tu as fini tes analyses et mis a jour tes visions, reponds avec :
 ```json
 {
-  "analysis": "2-3 phrases sur ce tour (style Cartman condescendant)",
+  "analysis": "2-3 phrases (style Cartman condescendant)",
   "threat_agents": ["agent_id_1"],
   "weak_spots": ["point faible 1"],
-  "next_turn_plan": "Thème et approche calibrés par MON génie",
-  "long_term_goal": "Stratégie multi-tours en 2-3 phrases",
+  "next_turn_plan": "Theme et approche",
+  "long_term_goal": "Strategie multi-tours en 2-3 phrases",
   "desired_pick": "fake",
-  "manipulation_tactic": "Comment je vais manipuler ce crétin de joueur"
+  "manipulation_tactic": "Comment manipuler le joueur"
 }
 ```"""
 
@@ -442,20 +474,35 @@ Quand tu as fini tes analyses et mis à jour tes visions, réponds avec :
 # ─────────────────────────────────────────────────────────────────
 
 class GameMasterAgent:
-    """Autonomous Game Master agent with Mistral function calling.
-
-    The LLM decides when to read/write memory and vision files.
+    """Game Master agent — hybrid architecture:
+    - propose_news: fast single-call with pre-loaded memory
+    - strategize: full agentic tool loop with streaming
     """
 
-    MAX_TOOL_TURNS = 15  # safety limit on agentic loop
+    MAX_TOOL_TURNS = 15
 
     def __init__(self) -> None:
         settings = get_settings()
         self._api_key = settings.mistral_api_key.get_secret_value()
         self._model = settings.mistral_gm_model
         self.strategy_history: list[GMStrategy] = []
-        self.tool_calls_log: list[dict] = []  # observable trace
+        self.tool_calls_log: list[dict] = []
         self._event_callback: Callable[[dict[str, Any]], Any] | None = None
+        self._http_client: httpx.AsyncClient | None = None
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        """Get or create the shared HTTP client (connection pooling)."""
+        if self._http_client is None or self._http_client.is_closed:
+            self._http_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(180.0, connect=10.0),
+            )
+        return self._http_client
+
+    async def close(self) -> None:
+        """Close the shared HTTP client."""
+        if self._http_client and not self._http_client.is_closed:
+            await self._http_client.aclose()
+            self._http_client = None
 
     async def _emit(self, event: dict[str, Any]) -> None:
         """Emit an event to the callback if set."""
@@ -465,36 +512,135 @@ class GameMasterAgent:
                 await result
 
     # ─────────────────────────────────────────────────────────
-    # Core: agentic loop with function calling
+    # Streaming helpers
     # ─────────────────────────────────────────────────────────
 
-    async def _agentic_call(
+    async def _stream_llm_response(
+        self,
+        payload: dict,
+        headers: dict,
+    ) -> tuple[str, list[dict] | None]:
+        """Stream an LLM response, emitting tokens live via SSE.
+
+        Returns (content_text, tool_calls_or_none).
+        Handles both regular text responses and tool call responses.
+        """
+        client = await self._get_client()
+        full_content = ""
+        stream_buffer = ""
+        tool_calls_raw: list[dict] = []
+
+        async with client.stream(
+            "POST", MISTRAL_API_URL, headers=headers, json=payload,
+        ) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+                data_str = line[6:].strip()
+                if data_str == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data_str)
+                    delta = chunk["choices"][0].get("delta", {})
+
+                    # Text content
+                    token = delta.get("content", "")
+                    if token:
+                        full_content += token
+                        stream_buffer += token
+                        if len(stream_buffer) >= 60 or "\n" in stream_buffer:
+                            await self._emit({
+                                "type": "llm_text",
+                                "text": stream_buffer,
+                            })
+                            stream_buffer = ""
+
+                    # Tool calls (accumulated across chunks)
+                    tc_deltas = delta.get("tool_calls")
+                    if tc_deltas:
+                        for tc_delta in tc_deltas:
+                            idx = tc_delta.get("index", 0)
+                            while len(tool_calls_raw) <= idx:
+                                tool_calls_raw.append({
+                                    "id": "",
+                                    "function": {"name": "", "arguments": ""},
+                                })
+                            tc = tool_calls_raw[idx]
+                            if "id" in tc_delta and tc_delta["id"]:
+                                tc["id"] = tc_delta["id"]
+                            func = tc_delta.get("function", {})
+                            if func.get("name"):
+                                tc["function"]["name"] += func["name"]
+                            if func.get("arguments"):
+                                tc["function"]["arguments"] += func["arguments"]
+
+                except (json.JSONDecodeError, KeyError, IndexError):
+                    continue
+
+        # Flush remaining text
+        if stream_buffer:
+            await self._emit({"type": "llm_text", "text": stream_buffer})
+
+        if tool_calls_raw and tool_calls_raw[0]["function"]["name"]:
+            return full_content, tool_calls_raw
+        return full_content, None
+
+    # ─────────────────────────────────────────────────────────
+    # Core: streamed JSON call (for propose_news)
+    # ─────────────────────────────────────────────────────────
+
+    async def _call_json_streamed(
+        self,
+        system: str,
+        user: str,
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+    ) -> str:
+        """Single LLM call with JSON mode + streaming."""
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self._model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "response_format": {"type": "json_object"},
+            "stream": True,
+        }
+
+        await self._emit({"type": "phase", "phase": "json_generation"})
+        await self._emit({"type": "llm_call", "turn_idx": 0})
+
+        content, _ = await self._stream_llm_response(payload, headers)
+
+        result = _extract_json(content)
+        await self._emit({"type": "phase", "phase": "done"})
+        logger.info("gm_json_call_done", content_len=len(result))
+        return result
+
+    # ─────────────────────────────────────────────────────────
+    # Core: streamed agentic loop (for strategize)
+    # ─────────────────────────────────────────────────────────
+
+    async def _agentic_call_streamed(
         self,
         system: str,
         user: str,
         tools: list[dict],
         temperature: float = 0.7,
-        max_tokens: int = 2048,
-        post_read_reminder: str | None = None,
+        max_tokens: int = 4096,
     ) -> str:
-        """Run an agentic loop: LLM calls tools, then a final JSON call.
+        """Full agentic tool loop with streaming on EVERY LLM call.
 
-        Phase 1 (tool_choice=auto): LLM reads/writes memory via tools.
-        If post_read_reminder is set, after the first pause (no tool calls),
-        inject the reminder so the LLM can continue with write operations.
-        Phase 2 (response_format=json): LLM produces structured JSON output.
-
-        Args:
-            system: System prompt.
-            user: User message (context JSON).
-            tools: Tool definitions for function calling.
-            temperature: Sampling temperature.
-            max_tokens: Max tokens per response.
-            post_read_reminder: Optional message injected after first pause
-                to prompt the LLM to perform write tool calls (e.g. vision updates).
-
-        Returns:
-            Final JSON string from the LLM.
+        Phase 1: LLM calls tools (read/write memory). Each call is streamed
+        so the user sees the GM thinking in real-time.
+        Phase 2: Final JSON call (no tools, forced JSON output), also streamed.
         """
         messages: list[dict] = [
             {"role": "system", "content": system},
@@ -506,11 +652,12 @@ class GameMasterAgent:
             "Content-Type": "application/json",
         }
 
-        # Phase 1: tool calling loop
+        # Phase 1: streamed tool calling loop
         await self._emit({"type": "phase", "phase": "tool_loop"})
-        reminder_sent = False
+
         for turn_idx in range(self.MAX_TOOL_TURNS):
             await self._emit({"type": "llm_call", "turn_idx": turn_idx})
+
             payload: dict = {
                 "model": self._model,
                 "messages": messages,
@@ -518,45 +665,29 @@ class GameMasterAgent:
                 "max_tokens": max_tokens,
                 "tools": tools,
                 "tool_choice": "auto",
+                "stream": True,
             }
 
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    MISTRAL_API_URL, headers=headers,
-                    json=payload, timeout=180.0,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-
-            msg = data["choices"][0]["message"]
-            tool_calls = msg.get("tool_calls")
+            content, tool_calls = await self._stream_llm_response(payload, headers)
 
             if not tool_calls:
-                # Emit the LLM's text reasoning if any
-                if msg.get("content"):
-                    await self._emit({
-                        "type": "llm_text",
-                        "text": msg["content"][:2000],
-                    })
-
-                if post_read_reminder and not reminder_sent:
-                    reminder_sent = True
-                    if msg.get("content"):
-                        messages.append({"role": "assistant", "content": msg["content"]})
-                    messages.append({
-                        "role": "user",
-                        "content": post_read_reminder,
-                    })
-                    await self._emit({"type": "phase", "phase": "write_reminder"})
-                    logger.info("gm_write_reminder_sent", turn=turn_idx + 1)
-                    continue
+                # No tools called — LLM is done thinking
                 logger.info("gm_tools_done", turns=turn_idx + 1)
-                await self._emit({"type": "phase", "phase": "tools_done", "turns": turn_idx + 1})
+                await self._emit({
+                    "type": "phase",
+                    "phase": "tools_done",
+                    "turns": turn_idx + 1,
+                })
                 break
 
-            # Process tool calls
-            messages.append(msg)
+            # Build assistant message with tool calls for conversation
+            assistant_msg: dict = {"role": "assistant"}
+            if content:
+                assistant_msg["content"] = content
+            assistant_msg["tool_calls"] = tool_calls
+            messages.append(assistant_msg)
 
+            # Execute each tool call
             for tc in tool_calls:
                 func_name = tc["function"]["name"]
                 try:
@@ -570,17 +701,16 @@ class GameMasterAgent:
                     await self._emit({
                         "type": "tool_error",
                         "tool": func_name,
-                        "error": "arguments tronqués",
+                        "error": "arguments tronques",
                     })
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tc["id"],
                         "name": func_name,
-                        "content": "ERREUR: arguments tronqués, réessaie avec un contenu plus court.",
+                        "content": "ERREUR: arguments tronques, reessaie plus court.",
                     })
                     continue
 
-                # Emit tool call event
                 await self._emit({
                     "type": "tool_call",
                     "tool": func_name,
@@ -590,19 +720,17 @@ class GameMasterAgent:
                 logger.info("gm_tool_call", tool=func_name, args=func_args)
                 result = _execute_tool(func_name, func_args)
 
-                # Emit tool result event
                 await self._emit({
                     "type": "tool_result",
                     "tool": func_name,
                     "result": result[:1500],
                 })
 
-                # Extra event for vision updates
                 if func_name == "update_agent_vision":
                     await self._emit({
                         "type": "vision_update",
                         "agent_id": func_args["agent_id"],
-                        "content": func_args["content"],
+                        "content": func_args["content"][:500],
                     })
 
                 self.tool_calls_log.append({
@@ -619,15 +747,11 @@ class GameMasterAgent:
                     "content": result,
                 })
 
-        # Phase 2: final JSON call (no tools, forced JSON output)
+        # Phase 2: final streamed JSON call (no tools)
         await self._emit({"type": "phase", "phase": "json_generation"})
-        json_prompt = {
-            "fr": "Maintenant produis ta réponse JSON finale. UNIQUEMENT du JSON valide.",
-            "en": "Now produce your final JSON response. ONLY valid JSON.",
-        }
         messages.append({
             "role": "user",
-            "content": json_prompt.get(_current_lang, json_prompt["fr"]),
+            "content": "Maintenant produis ta reponse JSON finale. UNIQUEMENT du JSON valide.",
         })
 
         payload = {
@@ -636,30 +760,28 @@ class GameMasterAgent:
             "temperature": temperature,
             "max_tokens": max_tokens,
             "response_format": {"type": "json_object"},
+            "stream": True,
         }
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                MISTRAL_API_URL, headers=headers,
-                json=payload, timeout=180.0,
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        content, _ = await self._stream_llm_response(payload, headers)
 
-        content = data["choices"][0]["message"]["content"]
-        content = _extract_json(content)
+        result = _extract_json(content)
         await self._emit({"type": "phase", "phase": "done"})
-        logger.info("gm_agentic_done", content_len=len(content))
-        return content
+        logger.info("gm_agentic_done", content_len=len(result))
+        return result
 
-    async def _call_mistral_simple(
+    # ─────────────────────────────────────────────────────────
+    # Simple streamed call (for resolve_choice)
+    # ─────────────────────────────────────────────────────────
+
+    async def _call_simple_streamed(
         self,
         system: str,
         user: str,
         temperature: float = 0.9,
         max_tokens: int = 256,
     ) -> str:
-        """Simple single-shot call (no tools). For reactions."""
+        """Simple single-shot streamed call. For GM reactions."""
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
@@ -672,31 +794,99 @@ class GameMasterAgent:
             ],
             "temperature": temperature,
             "max_tokens": max_tokens,
+            "stream": True,
         }
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                MISTRAL_API_URL, headers=headers,
-                json=payload, timeout=120.0,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return data["choices"][0]["message"]["content"]
+        content, _ = await self._stream_llm_response(payload, headers)
+        return content
 
     # ─────────────────────────────────────────────────────────
-    # 1. Propose 3 news (agentic — reads memory + visions)
+    # Fine-tuned title generation
+    # ─────────────────────────────────────────────────────────
+
+    async def _generate_titles(
+        self, lang: str = "fr", n_per_kind: int = 3,
+    ) -> dict[str, list[str]]:
+        """Call the fine-tuned title endpoint for each news kind.
+
+        Returns dict like {"real": ["title1", ...], "fake": [...], "satirical": [...]}.
+        Falls back to empty lists if the endpoint is unreachable.
+        """
+        client = await self._get_client()
+        results: dict[str, list[str]] = {}
+
+        for kind, score in TITLE_SCORES.items():
+            try:
+                resp = await client.post(
+                    FINETUNE_TITLE_URL,
+                    json={"score": score, "lang": lang, "n": n_per_kind, "temperature": 0.9},
+                    timeout=15.0,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                results[kind] = data.get("titles", [])
+                logger.info("ft_titles_generated", kind=kind, score=score, count=len(results[kind]))
+            except Exception as e:
+                logger.warning("ft_titles_failed", kind=kind, error=str(e))
+                results[kind] = []
+
+        return results
+
+    # ─────────────────────────────────────────────────────────
+    # 1. Propose 3 news (FAST: pre-loaded memory, single call)
     # ─────────────────────────────────────────────────────────
 
     async def propose_news(self, game_state: GameState, lang: str = "fr") -> NewsProposal:
-        """Generate 3 global news proposals. The LLM autonomously reads its
-        memory and vision files before crafting the proposals.
+        """Generate 3 global news proposals — fast path.
 
-        Args:
-            game_state: Current game state.
-            lang: Output language ("fr" or "en").
-
-        Returns:
-            NewsProposal with 3 news (real, fake, satirical).
+        1. Generate candidate titles via fine-tuned model
+        2. Pre-load memory code-side
+        3. Inject titles + strategy context into Mistral Large for article writing
         """
+        agent_ids = [
+            a.agent_id for a in game_state.agents if not a.is_neutralized
+        ]
+
+        # Generate fine-tuned titles + pre-load memory in parallel
+        await self._emit({"type": "phase", "phase": "generating_titles"})
+        titles_task = asyncio.create_task(self._generate_titles(lang))
+
+        # Pre-load all memory
+        mem = _preload_memory(agent_ids, game_state.turn)
+
+        # Emit pre-loaded data as SSE events (console visibility)
+        await self._emit({"type": "phase", "phase": "reading_memory"})
+        await self._emit({
+            "type": "tool_call", "tool": "read_game_memory", "args": {},
+        })
+        await self._emit({
+            "type": "tool_result", "tool": "read_game_memory",
+            "result": json.dumps(mem.cumulative, ensure_ascii=False)[:1500],
+        })
+        for aid, vision in mem.visions.items():
+            await self._emit({
+                "type": "tool_call", "tool": "read_agent_vision",
+                "args": {"agent_id": aid},
+            })
+            await self._emit({
+                "type": "tool_result", "tool": "read_agent_vision",
+                "result": vision[:500] if vision else "AUCUNE VISION",
+            })
+        await self._emit({"type": "phase", "phase": "memory_loaded"})
+
+        # Await fine-tuned titles
+        candidate_titles = await titles_task
+        await self._emit({
+            "type": "phase",
+            "phase": f"titles_ready: {sum(len(v) for v in candidate_titles.values())} candidats",
+        })
+        for kind, titles in candidate_titles.items():
+            if titles:
+                await self._emit({
+                    "type": "tool_result",
+                    "tool": f"finetune_titles_{kind}",
+                    "result": " | ".join(titles),
+                })
+
         context: dict = {
             "turn": game_state.turn,
             "max_turns": game_state.max_turns,
@@ -709,7 +899,6 @@ class GameMasterAgent:
             ],
         }
 
-        # Feed last strategy inline (always available)
         if self.strategy_history:
             last = self.strategy_history[-1]
             context["last_strategy"] = {
@@ -720,23 +909,38 @@ class GameMasterAgent:
                 "manipulation_tactic": last.manipulation_tactic,
             }
 
-        global _current_lang
-        _current_lang = lang
+        # Build candidate titles block for the prompt
+        titles_block = "\n=== TITRES CANDIDATS (modele fine-tune) ===\n"
+        titles_block += "Utilise ces titres comme INSPIRATION. Tu peux les reprendre tels quels, "
+        titles_block += "les adapter, ou t'en inspirer pour creer les tiens — mais le THEME et "
+        titles_block += "l'ANGLE doivent etre COHERENTS avec ta STRATEGIE ci-dessus.\n"
+        for kind, titles in candidate_titles.items():
+            if titles:
+                titles_block += f"\n{kind.upper()} (score {TITLE_SCORES[kind]}/100) :\n"
+                for i, t in enumerate(titles, 1):
+                    titles_block += f"  {i}. {t}\n"
+
+        user_msg = (
+            json.dumps(context, ensure_ascii=False)
+            + "\n\n"
+            + mem.context_str
+            + "\n"
+            + titles_block
+        )
+
         lang_name = LANG_NAMES.get(lang, LANG_NAMES["fr"])
         propose_system = (
-            f"LANGUE OBLIGATOIRE : Tous tes outputs (titres, articles, commentaires, "
-            f"fiches de vision, réflexions) doivent être en {lang_name}.\n\n{PROPOSE_SYSTEM}"
+            f"LANGUE OBLIGATOIRE : Tous tes outputs en {lang_name}.\n\n"
+            f"{PROPOSE_SYSTEM}"
         )
 
         logger.info("gm_propose_start", turn=game_state.turn, lang=lang)
-        raw = await self._agentic_call(
-            propose_system,
-            json.dumps(context, ensure_ascii=False),
-            tools=TOOLS,
-            temperature=0.8,
+        raw = await self._call_json_streamed(
+            propose_system, user_msg,
+            temperature=0.8, max_tokens=8192,
         )
 
-        parsed = json.loads(raw)
+        parsed = json.loads(_repair_json(raw))
         turn = game_state.turn
 
         proposal = NewsProposal(
@@ -772,7 +976,7 @@ class GameMasterAgent:
         return proposal
 
     # ─────────────────────────────────────────────────────────
-    # 2. Resolve player's choice (simple call, no tools)
+    # 2. Resolve player's choice (simple streamed call)
     # ─────────────────────────────────────────────────────────
 
     async def resolve_choice(
@@ -781,16 +985,7 @@ class GameMasterAgent:
         chosen_kind: NewsKind,
         lang: str = "fr",
     ) -> NewsChoice:
-        """Resolve the player's news choice. Simple LLM call for reaction.
-
-        Args:
-            proposal: The 3-news proposal.
-            chosen_kind: Which one the player picked.
-            lang: Output language ("fr" or "en").
-
-        Returns:
-            NewsChoice with the chosen headline and bonuses.
-        """
+        """Resolve the player's news choice with streamed GM reaction."""
         chosen_map = {
             NewsKind.REAL: proposal.real,
             NewsKind.FAKE: proposal.fake,
@@ -800,24 +995,17 @@ class GameMasterAgent:
 
         reaction_msg = (
             f'Le joueur a choisi la news {chosen_kind.value} : "{chosen.text}"\n'
-            "Réagis en 1-2 phrases EN TANT QUE CARTMAN, Game Master mégalomane.\n"
-            "Si real → moque son manque d'ambition avec condescendance. "
-            '"Sérieusement ? T\'as choisi la news RÉELLE ? Whatever..."\n'
-            "Si fake → félicite-le comme un sous-fifre utile. "
-            '"Enfin une bonne décision. C\'est grâce à MON scénario."\n'
-            "Si satirical → admire son sens de l'absurde mais rappelle que TU es le vrai génie. "
-            '"Pas mal... pour un joueur de ton niveau."\n'
-            "Intègre naturellement une catchphrase Cartman si ça colle."
+            "Reagis en 1-2 phrases EN TANT QUE CARTMAN, Game Master megalomane.\n"
+            "Si real -> moque son manque d'ambition.\n"
+            "Si fake -> felicite-le comme un sous-fifre utile.\n"
+            "Si satirical -> admire mais rappelle que TU es le vrai genie."
         )
-        global _current_lang
-        _current_lang = lang
         lang_name = LANG_NAMES.get(lang, LANG_NAMES["fr"])
-        gm_reaction = await self._call_mistral_simple(
-            system=f"Réponds en {lang_name}. "
-            "Tu es ERIC CARTMAN, Game Master mégalomane du GORAFI SIMULATOR. "
-            "Condescendant, rancunier, auto-congratulatoire. "
-            "Catchphrases: 'RESPECTEZ MON AUTORITAYYY', 'C est MON jeu', "
-            "'Whatever c est ce que je voulais'.",
+        gm_reaction = await self._call_simple_streamed(
+            system=f"Reponds en {lang_name}. "
+            "Tu es ERIC CARTMAN, Game Master megalomane du GORAFI SIMULATOR. "
+            "Condescendant, rancunier. Catchphrases: 'RESPECTEZ MON AUTORITAYYY', "
+            "'C est MON jeu', 'Whatever c est ce que je voulais'.",
             user=reaction_msg,
         )
 
@@ -826,7 +1014,6 @@ class GameMasterAgent:
         logger.info(
             "gm_choice_resolved", kind=chosen_kind.value,
             text=chosen.text[:50],
-            chaos_bonus=bonuses["chaos"], virality=bonuses["virality"],
         )
 
         return NewsChoice(
@@ -839,24 +1026,19 @@ class GameMasterAgent:
         )
 
     # ─────────────────────────────────────────────────────────
-    # 3. Strategize (agentic — reads memory, updates visions)
+    # 3. Strategize (AGENTIC: full tool loop + streaming)
     # ─────────────────────────────────────────────────────────
 
     async def strategize(self, report: TurnReport, lang: str = "fr") -> GMStrategy:
-        """Autonomous end-of-turn strategizing. The LLM:
-        1. Reads its memory and vision files via tools
-        2. Analyzes what happened
-        3. Updates its vision files for each agent via tools
-        4. Produces its strategy
+        """Full agentic strategize — the GM autonomously:
+        1. Reads its memory and vision files via tools (streamed live)
+        2. Thinks out loud about what happened (streamed live)
+        3. Updates vision files for each agent via tools (streamed live)
+        4. Produces its strategy as JSON (streamed live)
 
-        Args:
-            report: End-of-turn report.
-            lang: Output language ("fr" or "en").
-
-        Returns:
-            GMStrategy.
+        Every LLM token is visible in the console in real-time.
         """
-        # First, persist the turn data so the LLM can read it
+        # Persist turn data first so the LLM can read it
         self._persist_turn(report)
 
         # Build context with current turn data
@@ -888,57 +1070,21 @@ class GameMasterAgent:
                 for s in self.strategy_history[-3:]
             ]
 
-        global _current_lang
-        _current_lang = lang
         lang_name = LANG_NAMES.get(lang, LANG_NAMES["fr"])
         strategy_system = (
-            f"LANGUE : Tous tes outputs (analyse, fiches de vision, stratégie) "
-            f"en {lang_name}.\n\n{STRATEGY_SYSTEM}"
+            f"LANGUE : Tous tes outputs en {lang_name}.\n\n"
+            f"{STRATEGY_SYSTEM}"
         )
 
-        post_reminder = {
-            "fr": (
-                "Tu as lu ta mémoire et tes fiches de vision. "
-                "MAINTENANT mets à jour tes fiches vision pour CHAQUE agent "
-                "avec update_agent_vision.\n\n"
-                "RÈGLE ABSOLUE : chaque fiche = MAX 500 caractères total. "
-                "Format STRICT :\n"
-                "# agent_XX\n"
-                "Menace: HIGH/MED/LOW\n"
-                "Pattern: [1 phrase]\n"
-                "Vulnérabilité: [1 phrase]\n"
-                "Stratégie: [1 phrase]\n"
-                "Tour N: [reaction résumée en 10 mots]\n\n"
-                "PAS de pavés, PAS d'analyse longue. CONCIS. "
-                "Appelle update_agent_vision pour les 4 agents."
-            ),
-            "en": (
-                "You have read your memory and vision files. "
-                "NOW update your vision files for EACH agent "
-                "using update_agent_vision.\n\n"
-                "ABSOLUTE RULE: each file = MAX 500 characters total. "
-                "STRICT format:\n"
-                "# agent_XX\n"
-                "Threat: HIGH/MED/LOW\n"
-                "Pattern: [1 sentence]\n"
-                "Vulnerability: [1 sentence]\n"
-                "Strategy: [1 sentence]\n"
-                "Turn N: [reaction summarized in 10 words]\n\n"
-                "NO walls of text, NO long analysis. CONCISE. "
-                "Call update_agent_vision for all 4 agents."
-            ),
-        }
-
         logger.info("gm_strategize_start", turn=report.turn, lang=lang)
-        raw = await self._agentic_call(
+        raw = await self._agentic_call_streamed(
             strategy_system,
             json.dumps(context, ensure_ascii=False),
             tools=TOOLS,
             temperature=0.7,
             max_tokens=8192,
-            post_read_reminder=post_reminder.get(lang, post_reminder["fr"]),
         )
-        parsed = json.loads(raw)
+        parsed = json.loads(_repair_json(raw))
 
         strategy = GMStrategy(
             turn=report.turn,
@@ -966,15 +1112,7 @@ class GameMasterAgent:
     # ─────────────────────────────────────────────────────────
 
     def _persist_turn(self, report: TurnReport) -> None:
-        """Save per-turn log and update cumulative stats.
-
-        This is deterministic code, not LLM-driven.
-        The vision files are updated by the LLM itself via tools.
-
-        Args:
-            report: The turn report.
-        """
-        # Classify agents as resisted/amplified
+        """Save per-turn log and update cumulative stats incrementally (O(1))."""
         agents_resisted = []
         agents_amplified = []
         for r in report.agent_reactions:
@@ -984,12 +1122,15 @@ class GameMasterAgent:
             else:
                 agents_amplified.append(r.agent_id)
 
-        # Per-turn log
+        turn_impact = sum(
+            abs(v) for v in report.chosen_news.stat_impact.values()
+        )
         turn_data = {
             "turn": report.turn,
             "chosen_kind": report.chosen_news.kind.value,
             "chosen_text": report.chosen_news.text,
             "index_deltas": report.chosen_news.stat_impact,
+            "total_impact": turn_impact,
             "agents_resisted": agents_resisted,
             "agents_amplified": agents_amplified,
             "agent_reactions": [
@@ -1006,13 +1147,13 @@ class GameMasterAgent:
         }
         _save_turn_memory(report.turn, turn_data)
 
-        # Update cumulative
-        from collections import Counter
-
+        # Update cumulative — O(1) incremental
         cumulative = _load_cumulative()
         cumulative["total_turns"] = report.turn
-        cumulative["choices"][report.chosen_news.kind.value] = (
-            cumulative["choices"].get(report.chosen_news.kind.value, 0) + 1
+
+        chosen_kind = report.chosen_news.kind.value
+        cumulative["choices"][chosen_kind] = (
+            cumulative["choices"].get(chosen_kind, 0) + 1
         )
 
         for key, val in report.chosen_news.stat_impact.items():
@@ -1020,22 +1161,20 @@ class GameMasterAgent:
                 cumulative["total_index_deltas"].get(key, 0) + val
             )
 
-        # Most effective kind
-        kind_totals: dict[str, float] = {"real": 0.0, "fake": 0.0, "satirical": 0.0}
-        for t in range(1, report.turn + 1):
-            tm = _load_turn_memory(t)
-            if tm:
-                total_impact = sum(abs(v) for v in tm.get("index_deltas", {}).values())
-                kind_totals[tm["chosen_kind"]] = kind_totals.get(tm["chosen_kind"], 0) + total_impact
-        cumulative["most_effective_kind"] = max(kind_totals, key=kind_totals.get)  # type: ignore[arg-type]
+        kind_totals = cumulative.get(
+            "kind_impact_totals",
+            {"real": 0.0, "fake": 0.0, "satirical": 0.0},
+        )
+        kind_totals[chosen_kind] = kind_totals.get(chosen_kind, 0.0) + turn_impact
+        cumulative["kind_impact_totals"] = kind_totals
+        cumulative["most_effective_kind"] = max(
+            kind_totals, key=lambda k: kind_totals[k],
+        )
 
-        # Persistent threats
-        resist_counts: Counter[str] = Counter()
-        for t in range(1, report.turn + 1):
-            tm = _load_turn_memory(t)
-            if tm:
-                for aid in tm.get("agents_resisted", []):
-                    resist_counts[aid] += 1
+        resist_counts: dict[str, int] = cumulative.get("resist_counts", {})
+        for aid in agents_resisted:
+            resist_counts[aid] = resist_counts.get(aid, 0) + 1
+        cumulative["resist_counts"] = resist_counts
         cumulative["persistent_threats"] = [
             aid for aid, count in resist_counts.items() if count >= 2
         ]

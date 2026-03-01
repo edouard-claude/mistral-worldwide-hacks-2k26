@@ -10,7 +10,6 @@ Open: http://localhost:8899
 import asyncio
 import json
 import os
-import random
 import shutil
 import sys
 import uuid
@@ -34,8 +33,8 @@ from src.models.world import GlobalIndices, NewsKind
 
 # ── wh26 backend state ───────────────────────────────────────────
 
-WH26_BASE_URL = os.environ.get("WH26_BASE_URL", "https://wh26-backend.wh26.edouard.cl")
-WH26_WS_URL = os.environ.get("WH26_WS_URL", "wss://wh26-backend.wh26.edouard.cl")
+WH26_BASE_URL = "http://wh26-backend.wh26.edouard.cl"
+WH26_WS_URL = "ws://wh26-backend.wh26.edouard.cl"
 
 arena_session_id: str = str(uuid.uuid4())
 wh26_ws: websockets.ClientConnection | None = None
@@ -179,53 +178,6 @@ AGENTS_INIT = [
 AGENT_NAMES = {a.agent_id: a.name for a in AGENTS_INIT}
 AGENT_ICONS = {"agent_01": "🔍", "agent_02": "🐐", "agent_03": "📰", "agent_04": "🧨"}
 AGENT_COLORS = {"agent_01": "#00ff41", "agent_02": "#ffb300", "agent_03": "#00bfff", "agent_04": "#ff003c"}
-
-PLACEHOLDER_REACTIONS: dict[str, dict[str, list[str]]] = {
-    "agent_01": {
-        "real": ["Bon, au moins c'est vrai. Je vérifie quand même."],
-        "fake": ["FAUX. Mes 14 sources le confirment. Thread de 47 tweets en cours."],
-        "satirical": ["C'est du Gorafi ou c'est réel ? Je ne sais plus..."],
-    },
-    "agent_02": {
-        "real": ["Ouais 'officiel'... comme le reste. Je fais mes recherches."],
-        "fake": ["JE LE SAVAIS ! Partagé 200 fois sur Telegram."],
-        "satirical": ["Attendez... c'est de l'humour ou un aveu déguisé ?"],
-    },
-    "agent_03": {
-        "real": ["Info confirmée. Je prépare un article d'analyse approfondie."],
-        "fake": ["ARTICLE PUBLIÉ : Voici pourquoi cette info est fausse, preuves à l'appui."],
-        "satirical": ["Satirique mais révélateur. J'écris un édito sur le sujet."],
-    },
-    "agent_04": {
-        "real": ["Ennuyeux. J'ai quand même mis un titre clickbait dessus."],
-        "fake": ["BOOOOM ! 500k vues en 2h ! 30 comptes créés pour amplifier."],
-        "satirical": ["LOL partagé partout sans contexte. Les gens y croient."],
-    },
-}
-
-AGENT_STAT_PROFILES: dict[str, dict[str, dict[str, float]]] = {
-    "agent_01": {
-        "real": {"credibilite": -2, "rage": -1},
-        "fake": {"credibilite": -8, "complotisme": -5, "esperance_democratique": 3},
-        "satirical": {"credibilite": -3, "rage": -1},
-    },
-    "agent_02": {
-        "real": {"complotisme": 2, "rage": 1},
-        "fake": {"complotisme": 10, "rage": 8, "credibilite": 5},
-        "satirical": {"complotisme": 5, "rage": 3},
-    },
-    "agent_03": {
-        "real": {"esperance_democratique": 3, "credibilite": -2},
-        "fake": {"credibilite": -10, "esperance_democratique": 5, "complotisme": -3},
-        "satirical": {"esperance_democratique": 2, "credibilite": -2},
-    },
-    "agent_04": {
-        "real": {"rage": 3, "credibilite": 2},
-        "fake": {"rage": 12, "complotisme": 8, "credibilite": 6},
-        "satirical": {"rage": 7, "complotisme": 4, "credibilite": 3},
-    },
-}
-
 
 def _clamp(val: float, lo: float = 0.0, hi: float = 100.0) -> float:
     return max(lo, min(hi, val))
@@ -591,7 +543,7 @@ async def api_wh26():
 
 
 @app.get("/api/start")
-async def api_start(lang: str = Query("fr", pattern="^(fr|en)$")):
+async def api_start(lang: str = Query("fr", regex="^(fr|en)$")):
     global gm, game_state, game_lang, manipulation_history
     game_lang = lang
     manipulation_history = []
@@ -629,7 +581,7 @@ async def api_state():
 
 
 @app.get("/api/stream/propose")
-async def stream_propose(lang: str = Query("fr", pattern="^(fr|en)$")):
+async def stream_propose(lang: str = Query("fr", regex="^(fr|en)$")):
     """SSE endpoint: run propose_news and stream GM events."""
     global current_proposal, game_lang
     game_lang = lang
@@ -664,7 +616,7 @@ async def stream_propose(lang: str = Query("fr", pattern="^(fr|en)$")):
                     "next_turn_plan": "",
                 }
 
-            # Send proposal data
+            # Send proposal data immediately (don't wait for images)
             await queue.put({
                 "type": "proposal",
                 "data": {
@@ -676,14 +628,14 @@ async def stream_propose(lang: str = Query("fr", pattern="^(fr|en)$")):
                 },
             })
 
-            # Generate propaganda images in parallel (non-blocking)
+            # Generate propaganda images in parallel
             session_id = arena_session_id
-            tasks = [
+            img_tasks = [
                 generate_propaganda_image(current_proposal.real.text, "real", session_id),
                 generate_propaganda_image(current_proposal.fake.text, "fake", session_id),
                 generate_propaganda_image(current_proposal.satirical.text, "satirical", session_id),
             ]
-            images = await asyncio.gather(*tasks, return_exceptions=True)
+            images = await asyncio.gather(*img_tasks, return_exceptions=True)
             await queue.put({
                 "type": "images",
                 "data": {
@@ -710,7 +662,7 @@ async def stream_propose(lang: str = Query("fr", pattern="^(fr|en)$")):
 
 
 @app.get("/api/stream/choose")
-async def stream_choose(kind: str, lang: str = Query("fr", pattern="^(fr|en)$")):
+async def stream_choose(kind: str, lang: str = Query("fr", regex="^(fr|en)$")):
     """SSE endpoint: resolve choice, agent reactions, strategize — all streamed."""
     global last_choice, last_strategy, game_lang
     game_lang = lang
@@ -847,13 +799,13 @@ async def stream_choose(kind: str, lang: str = Query("fr", pattern="^(fr|en)$"))
                         "phase": f"wh26 erreur ({e}) — réactions placeholder",
                     })
             else:
-                print("[WH26] Not connected — using placeholders")
+                print("[WH26] Not connected — wh26 required for agent reactions")
                 await queue.put({
                     "type": "phase",
-                    "phase": "wh26 indisponible — réactions placeholder",
+                    "phase": "wh26 non connecte — reactions agents indisponibles",
                 })
 
-            # Build AgentReaction list (wh26 arena data or placeholder fallback)
+            # Build AgentReaction list from wh26 arena data
             for agent in gs.agents:
                 if agent.is_neutralized:
                     continue
@@ -862,10 +814,9 @@ async def stream_choose(kind: str, lang: str = Query("fr", pattern="^(fr|en)$"))
                     text = arena_data.get("take", arena_data.get("text", "..."))
                     stat_changes = arena_data.get("stat_changes", {})
                 else:
-                    # Fallback to placeholder
-                    pool = PLACEHOLDER_REACTIONS[agent.agent_id][chosen_kind.value]
-                    text = random.choice(pool)
-                    stat_changes = AGENT_STAT_PROFILES[agent.agent_id][chosen_kind.value]
+                    # No arena data for this agent — skip (wh26 may not have this agent)
+                    text = "[pas de reaction — wh26 non disponible]"
+                    stat_changes = {}
                 reactions.append(AgentReaction(
                     agent_id=agent.agent_id, turn=gs.turn, action_id="news_reaction",
                     reaction_text=text, stat_changes=stat_changes,
@@ -1007,4 +958,4 @@ async def serve_image(session_id: str, filename: str):
 
 if __name__ == "__main__":
     print("\n  GORAFI SIMULATOR — http://localhost:8899\n")
-    uvicorn.run(app, host="0.0.0.0", port=80, log_level="warning")
+    uvicorn.run(app, host="0.0.0.0", port=8899, log_level="warning")
