@@ -1,0 +1,180 @@
+# GORAFI SIMULATOR — Game Parameters
+
+turns:
+  max_turns: 10
+  credits_per_turn: 50
+  budget_titres_per_turn: 3
+
+global_indices:
+  credibilite:
+    label: "INDICE DE CRÉDULITÉ"
+    initial: 30
+    min: 0
+    max: 100
+  rage:
+    label: "THERMOMÈTRE DE RAGE"
+    initial: 10
+    min: 0
+    max: 100
+  complotisme:
+    label: "QUOTIENT COMPLOTISME"
+    initial: 15
+    min: 0
+    max: 100
+  esperance_democratique:
+    label: "ESPÉRANCE DÉMOCRATIQUE"
+    initial: 85
+    min: 0
+    max: 100
+    drain_per_turn: 2  # Drains naturally each turn
+
+actions:
+  desinformation:
+    label: "DÉSINFORMATION"
+    icon: "🔴"
+    color: "#ff003c"
+    items:
+      - id: fake_news
+        label: "Injecter Fake News"
+        tooltip: "Classique. Fonctionne depuis l'Antiquité."
+        cost: 8
+        cooldown: 0
+        effects: { credibilite: +10, complotisme: +5 }
+      - id: photo_choquante
+        label: "Sortir Photo Choquante"
+        tooltip: "Une image vaut mille mensonges."
+        cost: 10
+        cooldown: 2
+        effects: { rage: +15, credibilite: +5 }
+      - id: etude_commanditee
+        label: "Commanditer une Étude"
+        tooltip: "73% des statistiques sont inventées sur le moment."
+        cost: 15
+        cooldown: 3
+        effects: { credibilite: +12, esperance_democratique: -5 }
+      - id: vieux_scandale
+        label: "Ressortir Vieux Scandale"
+        tooltip: "Tout le monde a un placard. Le nôtre est mieux rangé."
+        cost: 6
+        cooldown: 1
+        effects: { rage: +10, complotisme: +3 }
+      - id: sondage_favorable
+        label: "Publier Sondage Favorable"
+        tooltip: "Sondage réalisé auprès d'un échantillon de nos amis."
+        cost: 5
+        cooldown: 0
+        effects: { credibilite: +8, esperance_democratique: -3 }
+
+  manipulation:
+    label: "MANIPULATION"
+    icon: "🐐"
+    color: "#ffb300"
+    items:
+      - id: bouc_emissaire
+        label: "Créer Bouc Émissaire"
+        tooltip: "Diviser pour mieux régner. Un classique indémodable."
+        cost: 12
+        cooldown: 2
+        effects: { rage: +20, esperance_democratique: -8 }
+      - id: distraction_massive
+        label: "Lancer Distraction Massive"
+        tooltip: "Regardez là-bas ! Un avion !"
+        cost: 10
+        cooldown: 1
+        effects: { credibilite: +5, rage: -10 }
+      - id: polemique
+        label: "Déclencher Polémique"
+        tooltip: "Twitter fera le reste."
+        cost: 7
+        cooldown: 0
+        effects: { rage: +12, complotisme: +8 }
+      - id: hashtag
+        label: "Lancer Hashtag"
+        tooltip: "La révolution sera hashtagée."
+        cost: 4
+        cooldown: 0
+        effects: { rage: +5, credibilite: +3 }
+      - id: creer_martyr
+        label: "Créer un Martyr"
+        tooltip: "Les morts ont toujours raison."
+        cost: 20
+        cooldown: 4
+        effects: { rage: +25, esperance_democratique: -15, complotisme: +10 }
+
+  censure:
+    label: "CENSURE"
+    icon: "🔇"
+    color: "#8b5cf6"
+    items:
+      - id: couper_internet
+        label: "Couper Internet"
+        tooltip: "Si personne ne tweete, ça n'existe pas."
+        cost: 18
+        cooldown: 3
+        effects: { rage: +15, credibilite: -10, esperance_democratique: -12 }
+      - id: dementi
+        label: "Lancer Démenti"
+        tooltip: "Nous démentons formellement ce que tout le monde a vu."
+        cost: 5
+        cooldown: 0
+        effects: { complotisme: +8, credibilite: +3 }
+      - id: faire_disparaitre
+        label: "Faire Disparaître"
+        tooltip: "Il est parti en vacances. Très longues vacances."
+        cost: 25
+        cooldown: 5
+        effects: { rage: +10, esperance_democratique: -20, complotisme: +15 }
+      - id: loi_exception
+        label: "Invoquer Loi d'Exception"
+        tooltip: "C'est temporaire. Promis."
+        cost: 15
+        cooldown: 3
+        effects: { esperance_democratique: -18, rage: +8 }
+      - id: museler_leader
+        label: "Museler un Leader"
+        tooltip: "La liberté d'expression a ses limites. Les nôtres."
+        cost: 14
+        cooldown: 2
+        effects: { esperance_democratique: -10, rage: +12 }
+
+  destabilisation:
+    label: "DÉSTABILISATION"
+    icon: "💣"
+    color: "#ff6b00"
+    items:
+      - id: guerre_commerciale
+        label: "Guerre Commerciale"
+        tooltip: "Les marchés détestent l'incertitude. Nous adorons."
+        cost: 16
+        cooldown: 3
+        effects: { rage: +10, esperance_democratique: -8 }
+      - id: urgence_nationale
+        label: "Urgence Nationale"
+        tooltip: "Rien de tel qu'une bonne crise pour resserrer les rangs."
+        cost: 20
+        cooldown: 4
+        effects: { rage: +20, credibilite: +10, esperance_democratique: -15 }
+      - id: cyberattaque
+        label: "Cyberattaque"
+        tooltip: "On ne sait pas qui c'est. Enfin si. Mais officiellement non."
+        cost: 18
+        cooldown: 3
+        effects: { complotisme: +15, rage: +8 }
+      - id: provoquer_krach
+        label: "Provoquer un Krach"
+        tooltip: "L'économie est un sentiment. Surtout la panique."
+        cost: 22
+        cooldown: 4
+        effects: { rage: +18, esperance_democratique: -12 }
+      - id: referendum_truque
+        label: "Référendum Truqué"
+        tooltip: "Le peuple a parlé. On l'a un peu aidé."
+        cost: 25
+        cooldown: 5
+        effects: { credibilite: +15, esperance_democratique: -25, complotisme: +12 }
+
+game_master:
+  commentary_model: "mistral-large-latest"  # Mistral Large API
+  agent_model: "mistralai/Mistral-Small-3.2-24B-Instruct-2503"  # vLLM
+  headlines_per_action: 2
+  bilan_style: "gorafi_satirique"

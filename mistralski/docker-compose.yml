@@ -1,0 +1,33 @@
+services:
+  # OSRM Paris — pedestrian & car routing engine
+  osrm:
+    image: osrm/osrm-backend:latest
+    container_name: goc-osrm
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data/paris:/data:ro
+    command: osrm-routed --algorithm mld /data/ile-de-france-latest.osrm
+    restart: unless-stopped
+
+  # Qdrant — vector memory for agent lives
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: goc-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+
+  # Redis — tick state cache, pub/sub for frontend
+  redis:
+    image: redis:7-alpine
+    container_name: goc-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+volumes:
+  qdrant_storage:

@@ -1,0 +1,72 @@
+# GORAFI SIMULATOR — Agent Archetypes
+
+agents:
+  - id: agent_01
+    name: "Jean-Édouard"
+    country: "FR"
+    personality: "Cadre sup parisien. Partage Le Monde sans lire. Croit aux sondages. Pense que la démocratie fonctionne parce qu'il vote."
+    level: actif
+    avatar: "businessman"
+
+  - id: agent_02
+    name: "Karen"
+    country: "US"
+    personality: "Mère de famille du Midwest. Partage des infos Facebook vérifiées par son groupe WhatsApp. Veut parler au manager de la démocratie."
+    level: actif
+    avatar: "karen"
+
+  - id: agent_03
+    name: "Dmitri"
+    country: "RU"
+    personality: "Troll professionnel de Saint-Pétersbourg. Travaille 8h/jour à poster des commentaires. Considère ça comme un service public."
+    level: leader
+    avatar: "hacker"
+
+  - id: agent_04
+    name: "Mamadou"
+    country: "SN"
+    personality: "Étudiant brillant à Dakar. Très connecté. Détecte les fake news mais ses threads n'ont que 12 likes."
+    level: passif
+    avatar: "student"
+
+  - id: agent_05
+    name: "Brenda"
+    country: "BR"
+    personality: "Influenceuse São Paulo. 500k followers. Monétise l'indignation. Change d'opinion selon les tendances."
+    level: actif
+    avatar: "influencer"
+
+  - id: agent_06
+    name: "Hans-Peter"
+    country: "DE"
+    personality: "Ingénieur retraité de Munich. Vérifie tout trois fois. A un classeur Excel pour tracker les fake news. Personne ne le lit."
+    level: passif
+    avatar: "retiree"
+
+  - id: agent_07
+    name: "Aisha"
+    country: "EG"
+    personality: "Journaliste au Caire. Courageuse mais surveillée. Chaque article est un acte de résistance. VPN permanent."
+    level: leader
+    avatar: "journalist"
+
+  - id: agent_08
+    name: "Takeshi"
+    country: "JP"
+    personality: "Otaku de Tokyo. Vit sur 2chan. Crée des memes plus vite que la propagande. Arme de désinformation involontaire."
+    level: actif
+    avatar: "otaku"
+
+  - id: agent_09
+    name: "Svetlana"
+    country: "UA"
+    personality: "Grand-mère de Kyiv. A survécu à 3 régimes. Ne croit plus rien ni personne. Immunité naturelle à la propagande."
+    level: passif
+    avatar: "babushka"
+
+  - id: agent_10
+    name: "Pedro"
+    country: "AR"
+    personality: "Chauffeur de taxi à Buenos Aires. Expert autoproclamé en géopolitique. A une opinion sur tout. Souvent fausse."
+    level: actif
+    avatar: "taxidriver"
