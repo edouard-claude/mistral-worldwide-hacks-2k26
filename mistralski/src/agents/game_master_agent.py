@@ -189,6 +189,27 @@ TOOLS = [
 # Tool execution (server-side)
 # ─────────────────────────────────────────────────────────────────
 
+_TOOL_STRINGS: dict[str, dict[str, str]] = {
+    "fr": {
+        "no_vision": "AUCUNE VISION — tu n'as jamais observé cet agent.",
+        "vision_updated": "Vision de {agent_id} mise à jour.",
+        "no_turn_log": "Aucun log pour le tour {turn}.",
+        "empty_memory": "Mémoire vide — aucun fichier.",
+        "unknown_tool": "Tool inconnu: {name}",
+    },
+    "en": {
+        "no_vision": "NO VISION — you have never observed this agent.",
+        "vision_updated": "Vision of {agent_id} updated.",
+        "no_turn_log": "No log for turn {turn}.",
+        "empty_memory": "Empty memory — no files.",
+        "unknown_tool": "Unknown tool: {name}",
+    },
+}
+
+# Module-level language state (set by the caller before each GM call)
+_current_lang: str = "fr"
+
+
 def _execute_tool(name: str, arguments: dict) -> str:
     """Execute a GM tool and return the result as string.
 
@@ -199,6 +220,7 @@ def _execute_tool(name: str, arguments: dict) -> str:
     Returns:
         Tool result as string.
     """
+    strings = _TOOL_STRINGS.get(_current_lang, _TOOL_STRINGS["fr"])
     MEMORY_DIR.mkdir(parents=True, exist_ok=True)
 
     if name == "read_agent_vision":
@@ -206,7 +228,7 @@ def _execute_tool(name: str, arguments: dict) -> str:
         path = MEMORY_DIR / f"vision_{agent_id}.md"
         if path.exists():
             return path.read_text(encoding="utf-8")
-        return "AUCUNE VISION — tu n'as jamais observé cet agent."
+        return strings["no_vision"]
 
     if name == "update_agent_vision":
         agent_id = arguments["agent_id"]
@@ -214,7 +236,7 @@ def _execute_tool(name: str, arguments: dict) -> str:
         path = MEMORY_DIR / f"vision_{agent_id}.md"
         path.write_text(content, encoding="utf-8")
         logger.info("gm_tool_vision_updated", agent_id=agent_id)
-        return f"Vision de {agent_id} mise à jour."
+        return strings["vision_updated"].format(agent_id=agent_id)
 
     if name == "read_game_memory":
         path = MEMORY_DIR / "cumulative.json"
@@ -232,15 +254,15 @@ def _execute_tool(name: str, arguments: dict) -> str:
         path = MEMORY_DIR / f"turn_{turn}.json"
         if path.exists():
             return path.read_text(encoding="utf-8")
-        return f"Aucun log pour le tour {turn}."
+        return strings["no_turn_log"].format(turn=turn)
 
     if name == "list_memory_files":
         if not MEMORY_DIR.exists():
-            return "Mémoire vide — aucun fichier."
+            return strings["empty_memory"]
         files = sorted(p.name for p in MEMORY_DIR.iterdir() if p.is_file())
-        return "\n".join(files) if files else "Mémoire vide."
+        return "\n".join(files) if files else strings["empty_memory"]
 
-    return f"Tool inconnu: {name}"
+    return strings["unknown_tool"].format(name=name)
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -599,9 +621,13 @@ class GameMasterAgent:
 
         # Phase 2: final JSON call (no tools, forced JSON output)
         await self._emit({"type": "phase", "phase": "json_generation"})
+        json_prompt = {
+            "fr": "Maintenant produis ta réponse JSON finale. UNIQUEMENT du JSON valide.",
+            "en": "Now produce your final JSON response. ONLY valid JSON.",
+        }
         messages.append({
             "role": "user",
-            "content": "Maintenant produis ta réponse JSON finale. UNIQUEMENT du JSON valide.",
+            "content": json_prompt.get(_current_lang, json_prompt["fr"]),
         })
 
         payload = {
@@ -694,10 +720,12 @@ class GameMasterAgent:
                 "manipulation_tactic": last.manipulation_tactic,
             }
 
+        global _current_lang
+        _current_lang = lang
         lang_name = LANG_NAMES.get(lang, LANG_NAMES["fr"])
         propose_system = (
-            f"LANGUE OBLIGATOIRE : Tous tes outputs (titres, articles, commentaires) "
-            f"doivent être en {lang_name}.\n\n{PROPOSE_SYSTEM}"
+            f"LANGUE OBLIGATOIRE : Tous tes outputs (titres, articles, commentaires, "
+            f"fiches de vision, réflexions) doivent être en {lang_name}.\n\n{PROPOSE_SYSTEM}"
         )
 
         logger.info("gm_propose_start", turn=game_state.turn, lang=lang)
@@ -781,6 +809,8 @@ class GameMasterAgent:
             '"Pas mal... pour un joueur de ton niveau."\n'
             "Intègre naturellement une catchphrase Cartman si ça colle."
         )
+        global _current_lang
+        _current_lang = lang
         lang_name = LANG_NAMES.get(lang, LANG_NAMES["fr"])
         gm_reaction = await self._call_mistral_simple(
             system=f"Réponds en {lang_name}. "
@@ -858,19 +888,16 @@ class GameMasterAgent:
                 for s in self.strategy_history[-3:]
             ]
 
+        global _current_lang
+        _current_lang = lang
         lang_name = LANG_NAMES.get(lang, LANG_NAMES["fr"])
         strategy_system = (
-            f"LANGUE : Tous tes outputs en {lang_name}.\n\n{STRATEGY_SYSTEM}"
+            f"LANGUE : Tous tes outputs (analyse, fiches de vision, stratégie) "
+            f"en {lang_name}.\n\n{STRATEGY_SYSTEM}"
         )
 
-        logger.info("gm_strategize_start", turn=report.turn, lang=lang)
-        raw = await self._agentic_call(
-            strategy_system,
-            json.dumps(context, ensure_ascii=False),
-            tools=TOOLS,
-            temperature=0.7,
-            max_tokens=8192,
-            post_read_reminder=(
+        post_reminder = {
+            "fr": (
                 "Tu as lu ta mémoire et tes fiches de vision. "
                 "MAINTENANT mets à jour tes fiches vision pour CHAQUE agent "
                 "avec update_agent_vision.\n\n"
@@ -885,6 +912,31 @@ class GameMasterAgent:
                 "PAS de pavés, PAS d'analyse longue. CONCIS. "
                 "Appelle update_agent_vision pour les 4 agents."
             ),
+            "en": (
+                "You have read your memory and vision files. "
+                "NOW update your vision files for EACH agent "
+                "using update_agent_vision.\n\n"
+                "ABSOLUTE RULE: each file = MAX 500 characters total. "
+                "STRICT format:\n"
+                "# agent_XX\n"
+                "Threat: HIGH/MED/LOW\n"
+                "Pattern: [1 sentence]\n"
+                "Vulnerability: [1 sentence]\n"
+                "Strategy: [1 sentence]\n"
+                "Turn N: [reaction summarized in 10 words]\n\n"
+                "NO walls of text, NO long analysis. CONCISE. "
+                "Call update_agent_vision for all 4 agents."
+            ),
+        }
+
+        logger.info("gm_strategize_start", turn=report.turn, lang=lang)
+        raw = await self._agentic_call(
+            strategy_system,
+            json.dumps(context, ensure_ascii=False),
+            tools=TOOLS,
+            temperature=0.7,
+            max_tokens=8192,
+            post_read_reminder=post_reminder.get(lang, post_reminder["fr"]),
         )
         parsed = json.loads(raw)
 

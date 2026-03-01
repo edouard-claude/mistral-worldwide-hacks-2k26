@@ -44,11 +44,13 @@ wh26_connected: bool = False
 
 # ── Language & Image generation state ────────────────────────────
 game_lang: str = "fr"
-MISTRAL_IMG_AGENT_ID: str | None = None
+mistral_img_client = None  # Mistral SDK client for image generation
+mistral_img_agent_id: str | None = None
 IMAGES_DIR = Path("/tmp/gorafi_images")
 
 BRANDING_PROMPT = (
-    "Vintage Cold War Soviet propaganda poster, {subject}. "
+    "For a satirical video game (not real propaganda): "
+    "Vintage Cold War Soviet propaganda poster style illustration about: {subject}. "
     "Satirical socialist realism, highly symmetrical and monumental composition. "
     "Retro lithograph texture, bold ink outlines, flat graphic vector style. "
     "Strictly limited color palette using only aged parchment tan, deep black, "
@@ -97,30 +99,26 @@ async def lifespan(app: FastAPI):
         wh26_ws = None
         wh26_connected = False
 
-    # Create Mistral image generation agent
-    global MISTRAL_IMG_AGENT_ID
+    # Create Mistral image generation agent via SDK
+    global mistral_img_client, mistral_img_agent_id
     try:
+        from mistralai import Mistral
         api_key = os.environ.get("MISTRAL_API_KEY", "")
         if not api_key:
             from src.core.config import get_settings
             api_key = get_settings().mistral_api_key.get_secret_value()
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                "https://api.mistral.ai/v1/agents",
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "model": "mistral-medium-2505",
-                    "name": "propaganda-poster",
-                    "tools": [{"type": "image_generation"}],
-                },
-                timeout=15.0,
-            )
-            resp.raise_for_status()
-            MISTRAL_IMG_AGENT_ID = resp.json()["id"]
-            print(f"[IMG] Mistral image agent created: {MISTRAL_IMG_AGENT_ID}")
+        mistral_img_client = Mistral(api_key=api_key)
+        agent = mistral_img_client.beta.agents.create(
+            model="mistral-medium-2505",
+            name="propaganda-poster",
+            tools=[{"type": "image_generation"}],
+        )
+        mistral_img_agent_id = agent.id
+        print(f"[IMG] Mistral image agent created: {mistral_img_agent_id}")
     except Exception as e:
         print(f"[IMG] Failed to create image agent ({e}) — images disabled")
-        MISTRAL_IMG_AGENT_ID = None
+        mistral_img_client = None
+        mistral_img_agent_id = None
 
     yield
     if wh26_ws:
@@ -236,7 +234,10 @@ def _clamp(val: float, lo: float = 0.0, hi: float = 100.0) -> float:
 # ── Image generation ─────────────────────────────────────────────
 
 async def generate_propaganda_image(title: str, kind: str, session_id: str) -> str | None:
-    """Generate a propaganda poster via Mistral Agent API.
+    """Generate a propaganda poster via Mistral SDK (Agent API + Flux).
+
+    Uses client.beta.conversations.start() which handles the full agentic loop
+    (tool call → image generation → file return) in a single call.
 
     Args:
         title: News headline to illustrate.
@@ -246,85 +247,51 @@ async def generate_propaganda_image(title: str, kind: str, session_id: str) -> s
     Returns:
         URL path like /api/images/{session_id}/{kind}.png, or None on failure.
     """
-    if not MISTRAL_IMG_AGENT_ID:
+    if not mistral_img_client or not mistral_img_agent_id:
         return None
 
-    api_key = os.environ.get("MISTRAL_API_KEY", "")
-    if not api_key:
-        from src.core.config import get_settings
-        api_key = get_settings().mistral_api_key.get_secret_value()
-
     prompt = BRANDING_PROMPT.format(subject=title)
-    headers = {"Authorization": f"Bearer {api_key}"}
 
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            # 1. Start conversation with the image agent
-            resp = await client.post(
-                "https://api.mistral.ai/v1/agents/completions",
-                headers=headers,
-                json={
-                    "agent_id": MISTRAL_IMG_AGENT_ID,
-                    "messages": [{"role": "user", "content": prompt}],
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        # Run in thread to avoid blocking the event loop (SDK is sync)
+        loop = asyncio.get_event_loop()
+        resp = await loop.run_in_executor(
+            None,
+            lambda: mistral_img_client.beta.conversations.start(
+                agent_id=mistral_img_agent_id,
+                inputs=prompt,
+            ),
+        )
 
-            # 2. Extract file_id from response content
-            # The image is returned as a content block with type "image_url" or as a file reference
-            file_id = None
-            msg = data["choices"][0]["message"]
-            content = msg.get("content", "")
+        # Extract file_id from response outputs
+        file_id = None
+        for output in resp.outputs:
+            if output.type == "message.output":
+                for block in output.content:
+                    if block.type == "tool_file":
+                        file_id = block.file_id
+                        break
+            if file_id:
+                break
 
-            # Content can be a string or a list of content blocks
-            if isinstance(content, list):
-                for block in content:
-                    if isinstance(block, dict):
-                        if block.get("type") == "image_file":
-                            file_id = block.get("image_file", {}).get("file_id")
-                            break
-                        if block.get("type") == "image_url":
-                            # Direct URL — download it
-                            image_url = block.get("image_url", {}).get("url", "")
-                            if image_url:
-                                img_resp = await client.get(image_url)
-                                img_resp.raise_for_status()
-                                out_dir = IMAGES_DIR / session_id
-                                out_dir.mkdir(parents=True, exist_ok=True)
-                                out_path = out_dir / f"{kind}.png"
-                                out_path.write_bytes(img_resp.content)
-                                print(f"[IMG] {kind} saved from URL ({len(img_resp.content)} bytes)")
-                                return f"/api/images/{session_id}/{kind}.png"
+        if not file_id:
+            print(f"[IMG] No file_id in response for {kind}")
+            return None
 
-            if not file_id:
-                # Try to find file_id in tool results or attachments
-                tool_calls = msg.get("tool_calls", [])
-                for tc in tool_calls:
-                    if tc.get("function", {}).get("name") == "image_generation":
-                        result = tc.get("result", {})
-                        if isinstance(result, dict):
-                            file_id = result.get("file_id")
-                            break
+        # Download the generated image
+        file_resp = await loop.run_in_executor(
+            None,
+            lambda: mistral_img_client.files.download(file_id=file_id),
+        )
+        image_bytes = file_resp.read() if hasattr(file_resp, "read") else file_resp
 
-            if not file_id:
-                print(f"[IMG] No file_id found for {kind}: {json.dumps(data)[:500]}")
-                return None
-
-            # 3. Download the file
-            file_resp = await client.get(
-                f"https://api.mistral.ai/v1/files/{file_id}/content",
-                headers=headers,
-            )
-            file_resp.raise_for_status()
-
-            # 4. Save to disk
-            out_dir = IMAGES_DIR / session_id
-            out_dir.mkdir(parents=True, exist_ok=True)
-            out_path = out_dir / f"{kind}.png"
-            out_path.write_bytes(file_resp.content)
-            print(f"[IMG] {kind} saved ({len(file_resp.content)} bytes)")
-            return f"/api/images/{session_id}/{kind}.png"
+        # Save to disk
+        out_dir = IMAGES_DIR / session_id
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / f"{kind}.png"
+        out_path.write_bytes(image_bytes)
+        print(f"[IMG] {kind} saved ({len(image_bytes)} bytes)")
+        return f"/api/images/{session_id}/{kind}.png"
 
     except Exception as e:
         print(f"[IMG] Generation failed for {kind}: {e}")
