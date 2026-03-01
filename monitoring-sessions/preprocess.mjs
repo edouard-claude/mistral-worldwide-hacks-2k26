@@ -4,12 +4,12 @@
  * Usage: node preprocess.mjs
  * Zero npm dependencies.
  */
-import { readdir, readFile, writeFile, mkdir, access } from 'node:fs/promises';
+import { readdir, readFile, writeFile, mkdir, access, stat } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXAMPLES = join(ROOT, 'examples');
+const EXAMPLES = process.env.SESSIONS_DIR || join(ROOT, 'examples');
 const DATA = join(ROOT, 'data');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -419,7 +419,7 @@ function buildGenealogy(agents) {
 
 // ─── Main ───────────────────────────────────────────────────────────────────
 
-async function main() {
+export async function main() {
   await mkdir(DATA, { recursive: true });
 
   const sessionDirs = await listDirs(EXAMPLES);
@@ -435,11 +435,24 @@ async function main() {
       continue;
     }
 
+    // Get last-modified timestamp from global.json
+    let updated_at = null;
+    try {
+      const st = await stat(join(sessionDir, 'global.json'));
+      updated_at = st.mtime.toISOString();
+    } catch { /* ignore */ }
+
     // Write individual session JSON
     await writeFile(
       join(DATA, `${session.session_id}.json`),
       JSON.stringify(session, null, 2),
     );
+
+    // Skip empty/test sessions
+    if (session.total_rounds === 0) {
+      console.log(`  Skipping (0 rounds)`);
+      continue;
+    }
 
     sessionIndex.push({
       session_id: session.session_id,
@@ -447,10 +460,14 @@ async function main() {
       total_rounds: session.total_rounds,
       agent_count: Object.keys(session.agents).length,
       alive_count: Object.values(session.agents).filter(a => a.alive).length,
+      updated_at,
     });
 
     console.log(`  -> ${session.total_rounds} rounds, ${Object.keys(session.agents).length} agents`);
   }
+
+  // Sort by most recent first
+  sessionIndex.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 
   // Write sessions index
   await writeFile(
@@ -461,7 +478,11 @@ async function main() {
   console.log(`\nDone! Generated ${sessionIndex.length} session files in data/`);
 }
 
-main().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+// Run directly if invoked as script
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+if (isMain) {
+  main().catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
+}

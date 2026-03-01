@@ -14,6 +14,7 @@
 | [`backend-relay/`](./backend-relay/) | HTTP/WS relay between Game Master and Swarm arena |
 | [`mistralski/`](./mistralski/) | **Game Master "Mistralski"** — autonomous adversarial AI that crafts news, manipulates the player, and strategizes against arena agents |
 | [`frontend/`](./frontend/) | **Gorafi USSR Front** — Cold War retro-Soviet dashboard (React + Vite + Tailwind + shadcn/ui) |
+| [`monitoring-sessions/`](./monitoring-sessions/) | **Debate Autopsy Dashboard** — Visualize agent genealogies, political evolution, and debate transcripts from arena sessions |
 
 ### Mistralski — Game Master Agent
 

@@ -25,6 +25,7 @@ export async function renderSessionList(app) {
           <span>${s.total_rounds} tour${s.total_rounds !== 1 ? 's' : ''}</span>
           <span>${s.agent_count} agents</span>
           <span>${s.alive_count} survivants</span>
+          ${s.updated_at ? `<span class="meta-time">${formatTime(s.updated_at)}</span>` : ''}
         </div>
       </div>
     `;
@@ -45,4 +46,18 @@ function escapeHtml(s) {
   const div = document.createElement('div');
   div.textContent = s;
   return div.innerHTML;
+}
+
+function formatTime(iso) {
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMs = now - d;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'maintenant';
+  if (diffMin < 60) return `il y a ${diffMin}min`;
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return `il y a ${diffH}h`;
+  const diffD = Math.floor(diffH / 24);
+  if (diffD < 7) return `il y a ${diffD}j`;
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }

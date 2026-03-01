@@ -132,6 +132,12 @@ a:hover { color: var(--accent-hover); }
   gap: 0.3rem;
 }
 
+.session-card .meta .meta-time {
+  margin-left: auto;
+  font-style: italic;
+  font-size: 0.8rem;
+}
+
 /* ─── Session Overview ─────────────────────────────────────────────────── */
 .session-header {
   margin-bottom: 2rem;
