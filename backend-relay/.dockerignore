@@ -1,0 +1,13 @@
+.env
+.git/
+.gitignore
+.venv/
+__pycache__/
+sessions/
+*.pyc
+*.pyo
+.DS_Store
+_bmad/
+_bmad-output/
+docs/
+.claude/
