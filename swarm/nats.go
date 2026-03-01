@@ -117,21 +117,34 @@ func (c *NATSClient) PublishEndEvent(payload EndEventPayload) error {
 
 // --- Subscriptions ---
 
+// FakeNewsPayload represents the JSON payload from backend-relay
+type FakeNewsPayload struct {
+	Content     string            `json:"content"`
+	QueryParams map[string]string `json:"query_params,omitempty"`
+}
+
 // SubscribeFakeNews subscribes to fake news input for rounds
 // Returns a channel that receives fake news strings
 func (c *NATSClient) SubscribeFakeNews() (chan string, *nats.Subscription, error) {
 	ch := make(chan string, 10)
 	sub, err := c.conn.Subscribe(c.subject("input", "fakenews"), func(msg *nats.Msg) {
+		// Parse JSON payload from backend-relay
+		var payload FakeNewsPayload
+		if err := json.Unmarshal(msg.Data, &payload); err != nil {
+			// Fallback: treat as raw string for backwards compatibility
+			payload.Content = string(msg.Data)
+		}
+
 		// F8: Non-blocking send to prevent NATS dispatcher blocking
 		select {
-		case ch <- string(msg.Data):
+		case ch <- payload.Content:
 		default:
 			// Buffer full, discard oldest and add new
 			select {
 			case <-ch:
 			default:
 			}
-			ch <- string(msg.Data)
+			ch <- payload.Content
 		}
 	})
 	if err != nil {
