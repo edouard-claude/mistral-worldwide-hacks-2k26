@@ -116,17 +116,22 @@ const PropagandaPanel = () => {
         {loading.news && missions.length === 0 ? (
           <NewsSkeletonGrid />
         ) : (
-          missions.map((m, index) => (
-            <NewsCard
-              key={m.id}
-              mission={m}
-              index={index}
-              canSelect={canSelect}
-              loading={loading}
-              lang={lang}
-              onSelect={handleSelectNews}
-            />
-          ))
+          missions.map((m, index) => {
+            const hasSelection = missions.some(mission => mission.inProgress);
+            const isDisabled = hasSelection && !m.inProgress;
+            return (
+              <NewsCard
+                key={m.id}
+                mission={m}
+                index={index}
+                canSelect={canSelect && !isDisabled}
+                isDisabled={isDisabled}
+                loading={loading}
+                lang={lang}
+                onSelect={handleSelectNews}
+              />
+            );
+          })
         )}
       </div>
 
@@ -146,17 +151,18 @@ interface NewsCardProps {
   mission: NewsMission;
   index: number;
   canSelect: boolean;
+  isDisabled?: boolean;
   loading: { images: boolean };
   lang: "fr" | "en";
   onSelect: (id: string) => void;
 }
 
-function NewsCard({ mission: m, index, canSelect, loading, lang, onSelect }: NewsCardProps) {
+function NewsCard({ mission: m, index, canSelect, isDisabled, loading, lang, onSelect }: NewsCardProps) {
   return (
     <div
-      className={`border-[4px] transition-all duration-200 ${
+      className={`border-[4px] transition-all duration-300 ${
         m.inProgress ? "border-soviet-red bg-white" : "border-soviet-black bg-white hover:border-soviet-red-dark"
-      } ${!canSelect ? 'opacity-70' : ''}`}
+      } ${isDisabled ? 'opacity-40 grayscale pointer-events-none' : ''} ${!canSelect && !isDisabled ? 'opacity-70' : ''}`}
       style={{
         animation: `news-enter 0.4s ease-out ${index * 0.1}s both`,
         boxShadow: m.inProgress
