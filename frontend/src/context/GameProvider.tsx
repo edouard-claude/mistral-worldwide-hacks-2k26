@@ -161,7 +161,7 @@ export function GameProvider({ children }: GameProviderProps) {
       dispatch({
         type: "SESSION_START",
         sessionId: data.session_id,
-        agents: data.agents,
+        agents: data.agents || [],  // May be undefined, real agents come from state.global
         indices: data.indices,
         turn: data.turn,
         maxTurns: data.max_turns,

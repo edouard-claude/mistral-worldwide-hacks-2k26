@@ -295,11 +295,8 @@ export function gameReducer(state: FullGameState, action: GameAction): FullGameS
 
     case "SESSION_START": {
       newsImageIdx = 0; // Reset image counter
-      if (!action.agents || !Array.isArray(action.agents)) {
-        console.warn("[SESSION_START] Invalid action, no agents array:", action);
-        return state;
-      }
-      const agents = action.agents.map(mapAgent);
+      // agents may be empty array - real agents come from state.global
+      const agents = Array.isArray(action.agents) ? action.agents.map(mapAgent) : [];
       const indices = mapIndices(
         { ...action.indices, rage: 0, credibilite: 100 },
         0,
