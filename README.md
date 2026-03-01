@@ -6,6 +6,8 @@
 
 > Hackathon submissions. Each folder = one project.
 
+**Disclaimer:** The "Soviet Propaganda Fake News Dashboard" theme is purely satirical — a deliberate caricature with absolutely no political conviction. We chose this over-the-top Cold War aesthetic as a comedic backdrop that allowed us to explore a genuinely complex and versatile software architecture: autonomous multi-agent systems, real-time event streaming, Darwinian selection algorithms, and adversarial AI game design. The absurdity is the point.
+
 ## Projects
 
 | Project | Description |

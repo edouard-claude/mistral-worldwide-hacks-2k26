@@ -173,8 +173,7 @@ const SwarmPanel = () => {
           return (
             <div
               key={agent.id || `agent-${i}`}
-              onClick={() => setSelectedAgent(agent)}
-              className={`agent-card-ocre p-3 transition-all duration-300 cursor-pointer ${
+              className={`agent-card-ocre p-3 transition-all duration-300 ${
                 agent.health < 30 ? "border-soviet-red" : ""
               } ${winner ? "border-comic-yellow animate-victory-glow" : ""} ${clone ? "border-soviet-matrix animate-clone-spawn" : ""} ${
                 loser ? "animate-death-flash" : ""
@@ -249,7 +248,6 @@ const SwarmPanel = () => {
                       {tr("swarm.danger", lang)}
                     </span>
                   )}
-                  <div className="text-[8px] text-soviet-black/40 mt-0.5 italic">{tr("swarm.clickDetails", lang)}</div>
                 </div>
               </div>
 

@@ -409,15 +409,22 @@ function dispatchWsEvent(
     }
 
     // Vision update
-    case "vision_update":
+    case "vision_update": {
+      const content = (data.content || String(data)).replace(/\\n/g, "\n");
       dispatch({
         type: "ADD_TERMINAL_LINE",
-        line: { type: "vision_update", text: `VISION ${data.agent_id || ""}: ${data.content || data}` },
+        line: { type: "vision_update", text: `VISION ${data.agent_id || ""}: ${content}` },
       });
       break;
+    }
 
     // Heartbeat — ignore silently
     case "heartbeat":
+      break;
+
+    // Result acknowledgements — ignore silently
+    case "gm.result":
+    case "result":
       break;
 
     // Dynamic arena events: agent.<aid>.output, agent.<aid>.status, event.*, etc.
@@ -563,14 +570,12 @@ function dispatchWsEvent(
         break;
       }
 
-      // Unknown event — log for debugging (but skip "result" which is common noise)
-      if (eventType !== "result") {
-        console.log("[WS] Unhandled event:", eventType, data);
-        dispatch({
-          type: "ADD_TERMINAL_LINE",
-          line: { type: "info", text: `[${eventType}] ${JSON.stringify(data).slice(0, 150)}` },
-        });
-      }
+      // Unknown event — log for debugging
+      console.log("[WS] Unhandled event:", eventType, data);
+      dispatch({
+        type: "ADD_TERMINAL_LINE",
+        line: { type: "info", text: `[${eventType}] ${JSON.stringify(data).slice(0, 150)}` },
+      });
       break;
     }
   }
