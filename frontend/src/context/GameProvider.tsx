@@ -4,7 +4,7 @@
 import React, { useReducer, useEffect, useRef, useCallback, useMemo } from "react";
 import { gameReducer, initialGameState } from "@/reducers/gameReducer";
 import type { GameAction } from "@/types/ws-events";
-import { fetchApi, triggerPropose, triggerChoose, type StartResponse } from "@/services/api";
+import { initSession, startGame as apiStartGame, triggerPropose, triggerChoose, type StartResponse } from "@/services/api";
 import { API_BASE_URL, WS_BASE_URL } from "@/config/constants";
 import { tr, type Lang } from "@/i18n/translations";
 import { GameContext, type GameActions, type GameContextValue } from "./GameContext";
@@ -154,22 +154,29 @@ export function GameProvider({ children }: GameProviderProps) {
     dispatch({ type: "SET_TURN_PHASE", phase: "loading" });
 
     try {
-      const data = await fetchApi<StartResponse>(`/api/start?lang=${langRef.current}`);
+      // 1. Generate a new session UUID
+      const sessionId = crypto.randomUUID();
+      console.log("[API] Generated session:", sessionId);
 
-      sessionIdRef.current = data.session_id;
+      // 2. Initialize session with relay (triggers NATS arena.init for swarm)
+      await initSession(sessionId);
+      console.log("[API] Session initialized");
+
+      // 3. Connect WebSocket BEFORE calling start so we don't miss events
+      sessionIdRef.current = sessionId;
+      connectWebSocket(sessionId);
+
+      // 4. Start game with the session
+      const data = await apiStartGame(sessionId, langRef.current);
 
       dispatch({
         type: "SESSION_START",
-        sessionId: data.session_id,
+        sessionId: sessionId,
         agents: data.agents || [],  // May be undefined, real agents come from state.global
         indices: data.indices,
         turn: data.turn,
         maxTurns: data.max_turns,
       });
-
-      // Connect WebSocket after session starts
-      // The needsPropose effect will trigger the first proposal once WS connects
-      connectWebSocket(data.session_id);
     } catch (err: any) {
       console.error("[API] Start error:", err);
       dispatch({ type: "GM_ERROR", payload: { message: err.message } });

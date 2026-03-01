@@ -18,6 +18,37 @@ export async function fetchApi<T = unknown>(path: string): Promise<T> {
 }
 
 // ============================================================================
+// Session Management
+// ============================================================================
+
+/**
+ * Initialize a new session with the relay — triggers NATS arena.init for swarm
+ */
+export async function initSession(sessionId: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/init_session`, {
+    method: "POST",
+    headers: { ...HEADERS, "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+  if (!res.ok) {
+    throw new Error(`Init session error ${res.status}: ${res.statusText}`);
+  }
+}
+
+/**
+ * Start a game with an existing session — returns game state
+ */
+export async function startGame(sessionId: string, lang: Lang): Promise<StartResponse> {
+  const res = await fetch(`${BASE_URL}/api/start?session_id=${sessionId}&lang=${lang}`, {
+    headers: HEADERS,
+  });
+  if (!res.ok) {
+    throw new Error(`Start error ${res.status}: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+// ============================================================================
 // REST Triggers (return 202, events come via WebSocket)
 // ============================================================================
 
