@@ -8,9 +8,9 @@ import (
 
 // AgentNames are the predefined names for agents
 var AgentNames = []string{
-	"Marcus", "Elena", "Victor", "Luna",
-	"Dante", "Aria", "Felix", "Nova",
-	"Oscar", "Zara", "Leon", "Maya",
+	"Grigori", "Natasha", "Pavel", "Zoya",
+	"Dmitri", "Aria", "Alexei", "Vera",
+	"Sergei", "Nadia", "Nikolai", "Olga",
 }
 
 // generateUUID generates a random UUID v4
