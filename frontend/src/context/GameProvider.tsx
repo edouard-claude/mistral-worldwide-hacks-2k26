@@ -507,8 +507,11 @@ function dispatchWsEvent(
         break;
       }
 
-      // Pattern: state.global (omniscient state from swarm)
-      if (parts.length >= 2 && parts[0] === "state" && parts[1] === "global") {
+      // Pattern: state.global or arena.state.global (omniscient state from swarm)
+      if (
+        (parts.length >= 2 && parts[0] === "state" && parts[1] === "global") ||
+        (parts.length >= 3 && parts[0] === "arena" && parts[1] === "state" && parts[2] === "global")
+      ) {
         dispatch({ type: "ARENA_GLOBAL_STATE", payload: data });
         break;
       }
