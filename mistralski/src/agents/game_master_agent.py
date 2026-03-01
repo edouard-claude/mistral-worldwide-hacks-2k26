@@ -523,7 +523,7 @@ class GameMasterAgent:
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
                     MISTRAL_API_URL, headers=headers,
-                    json=payload, timeout=90.0,
+                    json=payload, timeout=180.0,
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -641,7 +641,7 @@ class GameMasterAgent:
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 MISTRAL_API_URL, headers=headers,
-                json=payload, timeout=90.0,
+                json=payload, timeout=180.0,
             )
             resp.raise_for_status()
             data = resp.json()
@@ -676,7 +676,7 @@ class GameMasterAgent:
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 MISTRAL_API_URL, headers=headers,
-                json=payload, timeout=60.0,
+                json=payload, timeout=120.0,
             )
             resp.raise_for_status()
             data = resp.json()
