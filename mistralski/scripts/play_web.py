@@ -646,6 +646,24 @@ async def stream_propose(lang: str = Query("fr", regex="^(fr|en)$")):
         global current_proposal
         try:
             current_proposal = await gm.propose_news(gs, lang=lang)
+
+            # Build GM's hidden recommendation from last strategy
+            if gm.strategy_history:
+                prev = gm.strategy_history[-1]
+                gm_secret = {
+                    "desired_pick": prev.desired_pick or "fake",
+                    "manipulation_tactic": prev.manipulation_tactic or "",
+                    "next_turn_plan": prev.next_turn_plan or "",
+                }
+            else:
+                gm_secret = {
+                    "desired_pick": "fake",
+                    "manipulation_tactic": "Turn 1 — default orientation toward fake (max chaos)"
+                    if lang == "en"
+                    else "Tour 1 — orientation par défaut vers fake (max chaos)",
+                    "next_turn_plan": "",
+                }
+
             # Send proposal data
             await queue.put({
                 "type": "proposal",
@@ -654,6 +672,7 @@ async def stream_propose(lang: str = Query("fr", regex="^(fr|en)$")):
                     "fake": {"text": current_proposal.fake.text, "body": current_proposal.fake.body, "stat_impact": current_proposal.fake.stat_impact},
                     "satirical": {"text": current_proposal.satirical.text, "body": current_proposal.satirical.body, "stat_impact": current_proposal.satirical.stat_impact},
                     "gm_commentary": current_proposal.gm_commentary,
+                    "gm_secret": gm_secret,
                 },
             })
 
