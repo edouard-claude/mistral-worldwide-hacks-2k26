@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import type { FallenAgent } from "@/hooks/useBackendEngine";
+import type { FallenAgent } from "@/types/ws-events";
 import agentKgb from "@/assets/agent_kgb.png";
 import agentSabot from "@/assets/agent_sabot.png";
 import agentPropa from "@/assets/agent_propa.png";

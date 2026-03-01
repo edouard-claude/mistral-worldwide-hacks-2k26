@@ -34,8 +34,8 @@ from src.models.world import GlobalIndices, NewsKind
 
 # ── wh26 backend state ───────────────────────────────────────────
 
-WH26_BASE_URL = "http://wh26-backend.wh26.edouard.cl"
-WH26_WS_URL = "ws://wh26-backend.wh26.edouard.cl"
+WH26_BASE_URL = os.environ.get("WH26_BASE_URL", "https://wh26-backend.wh26.edouard.cl")
+WH26_WS_URL = os.environ.get("WH26_WS_URL", "wss://wh26-backend.wh26.edouard.cl")
 
 arena_session_id: str = str(uuid.uuid4())
 wh26_ws: websockets.ClientConnection | None = None
@@ -591,7 +591,7 @@ async def api_wh26():
 
 
 @app.get("/api/start")
-async def api_start(lang: str = Query("fr", regex="^(fr|en)$")):
+async def api_start(lang: str = Query("fr", pattern="^(fr|en)$")):
     global gm, game_state, game_lang, manipulation_history
     game_lang = lang
     manipulation_history = []
@@ -629,7 +629,7 @@ async def api_state():
 
 
 @app.get("/api/stream/propose")
-async def stream_propose(lang: str = Query("fr", regex="^(fr|en)$")):
+async def stream_propose(lang: str = Query("fr", pattern="^(fr|en)$")):
     """SSE endpoint: run propose_news and stream GM events."""
     global current_proposal, game_lang
     game_lang = lang
@@ -710,7 +710,7 @@ async def stream_propose(lang: str = Query("fr", regex="^(fr|en)$")):
 
 
 @app.get("/api/stream/choose")
-async def stream_choose(kind: str, lang: str = Query("fr", regex="^(fr|en)$")):
+async def stream_choose(kind: str, lang: str = Query("fr", pattern="^(fr|en)$")):
     """SSE endpoint: resolve choice, agent reactions, strategize — all streamed."""
     global last_choice, last_strategy, game_lang
     game_lang = lang
@@ -1007,4 +1007,4 @@ async def serve_image(session_id: str, filename: str):
 
 if __name__ == "__main__":
     print("\n  GORAFI SIMULATOR — http://localhost:8899\n")
-    uvicorn.run(app, host="0.0.0.0", port=8899, log_level="warning")
+    uvicorn.run(app, host="0.0.0.0", port=80, log_level="warning")

@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import type { Agent, GameState } from "@/data/gameData";
-import type { TurnPhase, TurnResult, GmAgentVision, GmStrategy } from "@/hooks/useBackendEngine";
+import type { TurnPhase, TurnResult, GmAgentVision, GmStrategy } from "@/types/ws-events";
 import agentGm from "@/assets/agent_gm.png";
 import { useLang } from "@/i18n/LanguageContext";
 import { tr } from "@/i18n/translations";

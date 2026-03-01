@@ -8,25 +8,35 @@ import GameOverScreen from "@/components/dashboard/GameOverScreen";
 import ChaosEventModal from "@/components/dashboard/ChaosEventModal";
 import WelcomeScreen from "@/components/dashboard/WelcomeScreen";
 import GmTerminal from "@/components/dashboard/GmTerminal";
-import { useGameEngine } from "@/hooks/useBackendEngine";
+import { GameProvider } from "@/context/GameProvider";
+import { useGame } from "@/hooks/useGame";
 import { LanguageProvider } from "@/i18n/LanguageContext";
 import { tr } from "@/i18n/translations";
 
-// Game of Claw — main view
-const Index = () => {
-  const engine = useGameEngine();
-  const { debateLines, turnPhase, lang } = engine;
+// Inner component that uses GameContext
+const GameDashboard = () => {
+  const { state, actions } = useGame();
+  const {
+    debateLines,
+    turnPhase,
+    lang,
+    gameState,
+    errorMessage,
+    pendingChaosEvent,
+    gameOver,
+    turnTransition,
+  } = state;
 
   const [gameStarted, setGameStarted] = useState(false);
   const [activeDebateIndex, setActiveDebateIndex] = useState(-1);
   const [visibleLines, setVisibleLines] = useState(0);
 
-  const handleStart = (lang: "fr" | "en") => {
+  const handleStart = (selectedLang: "fr" | "en") => {
     setGameStarted(true);
-    engine.startGame(lang);
+    actions.startGame(selectedLang);
   };
 
-  // Auto-play debate lines one by one (from SSE, lines arrive progressively)
+  // Auto-play debate lines one by one (from WS, lines arrive progressively)
   useEffect(() => {
     if (turnPhase !== "debating" && turnPhase !== "results") return;
     if (visibleLines >= debateLines.length) return;
@@ -40,7 +50,7 @@ const Index = () => {
     return () => clearTimeout(timer);
   }, [visibleLines, debateLines.length, turnPhase]);
 
-  // Show new lines as they arrive from SSE
+  // Show new lines as they arrive from WS
   useEffect(() => {
     if (debateLines.length > visibleLines) {
       // New line arrived from backend, trigger show
@@ -50,7 +60,7 @@ const Index = () => {
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [debateLines.length]);
+  }, [debateLines.length, visibleLines]);
 
   // Reset when new turn starts
   useEffect(() => {
@@ -67,9 +77,6 @@ const Index = () => {
     return () => clearTimeout(timer);
   }, [activeDebateIndex]);
 
-  const activeSpeaker = activeDebateIndex >= 0 ? debateLines[activeDebateIndex]?.agent : null;
-  const activeSpeakerType = activeDebateIndex >= 0 ? debateLines[activeDebateIndex]?.type : null;
-
   if (!gameStarted) {
     return <WelcomeScreen onStart={handleStart} />;
   }
@@ -80,18 +87,18 @@ const Index = () => {
     <LanguageProvider value={lang}>
       <div className="h-screen flex flex-col overflow-hidden border-8 border-soviet-red box-border">
         <TopBar
-          gameState={engine.gameState}
+          gameState={gameState}
           turnPhase={effectivePhase}
-          onEndTurn={() => { if (engine.turnPhase === "results") engine.nextTurn(); }}
-          canEndTurn={engine.turnPhase === "results"}
-          gameOver={engine.gameOver}
-          onChangeLang={engine.changeLang}
+          onEndTurn={() => { if (turnPhase === "results") actions.nextTurn(); }}
+          canEndTurn={turnPhase === "results"}
+          gameOver={gameOver}
+          onChangeLang={actions.changeLang}
         />
 
-        {engine.errorMessage && (
+        {errorMessage && (
           <div className="bg-soviet-red text-foreground text-center py-2 px-4 text-sm font-heading">
-            ⚠ {engine.errorMessage}
-            <button onClick={() => engine.startGame()} className="ml-4 underline font-bold">{tr("index.retry", lang)}</button>
+            ⚠ {errorMessage}
+            <button onClick={() => actions.startGame()} className="ml-4 underline font-bold">{tr("index.retry", lang)}</button>
           </div>
         )}
 
@@ -103,55 +110,30 @@ const Index = () => {
         )}
 
         <div className="flex-1 grid grid-cols-[280px_1fr_280px] gap-4 p-4 overflow-hidden bg-stripes">
-          <PropagandaPanel
-            missions={engine.missions}
-            gameState={engine.gameState}
-            onSelectNews={engine.selectNews}
-            turnPhase={effectivePhase}
-            agents={engine.liveAgents}
-            turnResult={engine.turnResult}
-            gmVisions={engine.gmVisions}
-            gmStrategy={engine.gmStrategy}
-          />
+          <PropagandaPanel />
           <CenterPanel
             visibleLines={visibleLines}
             activeDebateIndex={activeDebateIndex}
-            debateLines={engine.debateLines}
-            gameState={engine.gameState}
-            turnPhase={effectivePhase}
-            turnResult={engine.turnResult}
-            selectedMission={engine.selectedMission}
-            gmTerminal={
-              <GmTerminal lines={engine.gmTerminalLines} isStreaming={engine.isStreaming} />
-            }
+            gmTerminal={<GmTerminal />}
           />
-          <SwarmPanel
-            agents={engine.liveAgents}
-            activeSpeaker={activeSpeaker}
-            activeSpeakerType={activeSpeakerType}
-            turnResult={engine.turnResult}
-            turnPhase={effectivePhase}
-            politicalSpectrum={engine.politicalSpectrum}
-            gameState={engine.gameState}
-            fallenAgents={engine.fallenAgents}
-          />
+          <SwarmPanel />
         </div>
 
         <NewsTicker />
 
-        {engine.pendingChaosEvent && (
-          <ChaosEventModal event={engine.pendingChaosEvent} onClose={engine.dismissChaosEvent} />
+        {pendingChaosEvent && (
+          <ChaosEventModal event={pendingChaosEvent} onClose={actions.dismissChaosEvent} />
         )}
 
-        {engine.gameOver && (
+        {gameOver && (
           <GameOverScreen
-            gameState={engine.gameState}
-            agents={engine.liveAgents}
-            onRestart={engine.restartGame}
+            gameState={gameState}
+            agents={state.liveAgents}
+            onRestart={actions.restartGame}
           />
         )}
 
-        {engine.turnTransition && (
+        {turnTransition && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center pointer-events-none"
             style={{ animation: "turn-transition 2.5s ease-in-out forwards" }}>
             <div className="absolute inset-0" style={{ backgroundColor: "hsl(var(--black) / 0.85)" }} />
@@ -169,7 +151,7 @@ const Index = () => {
                   color: "hsl(var(--comic-yellow))",
                   textShadow: "3px 3px 0px hsl(var(--red-dark)), 5px 5px 0px hsl(var(--black))",
                 }}>
-                {tr("topbar.turn", lang)} {engine.gameState.turn + 1}
+                {tr("topbar.turn", lang)} {gameState.turn + 1}
               </p>
               <p className="text-sm mt-2 tracking-[0.2em] uppercase font-bold"
                 style={{ color: "hsl(var(--ocre-gulag))" }}>
@@ -180,6 +162,15 @@ const Index = () => {
         )}
       </div>
     </LanguageProvider>
+  );
+};
+
+// Main component with GameProvider wrapper
+const Index = () => {
+  return (
+    <GameProvider>
+      <GameDashboard />
+    </GameProvider>
   );
 };
 

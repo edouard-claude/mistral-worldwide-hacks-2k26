@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { NewsMission, GameState, Agent } from "@/data/gameData";
-import type { TurnPhase, TurnResult } from "@/hooks/useBackendEngine";
+import type { NewsMission } from "@/data/gameData";
+import { useGame } from "@/hooks/useGame";
 import { Eye } from "lucide-react";
 import agentGm from "@/assets/agent_gm.png";
 import news1Img from "@/assets/news1.jpg";
@@ -15,6 +15,8 @@ import news9Img from "@/assets/news9.jpg";
 import GameMasterCard from "./GameMasterCard";
 import { useLang } from "@/i18n/LanguageContext";
 import { tr } from "@/i18n/translations";
+import { NewsSkeletonGrid } from "@/components/skeletons/NewsSkeleton";
+import { ImageSkeleton } from "@/components/skeletons/ImageSkeleton";
 
 const imageMap: Record<string, string> = {
   news1: news1Img, news2: news2Img, news3: news3Img,
@@ -22,23 +24,28 @@ const imageMap: Record<string, string> = {
   news7: news7Img, news8: news8Img, news9: news9Img,
 };
 
-import type { GmAgentVision, GmStrategy } from "@/hooks/useBackendEngine";
-
-interface PropagandaPanelProps {
-  missions: NewsMission[];
-  gameState: GameState;
-  onSelectNews: (id: string) => void;
-  turnPhase: TurnPhase;
-  agents: Agent[];
-  turnResult: TurnResult | null;
-  gmVisions: Record<string, GmAgentVision>;
-  gmStrategy: GmStrategy | null;
-}
-
-const PropagandaPanel = ({ missions, gameState, onSelectNews, turnPhase, agents, turnResult, gmVisions, gmStrategy }: PropagandaPanelProps) => {
+const PropagandaPanel = () => {
   const lang = useLang();
+  const { state, actions } = useGame();
+  const {
+    missions,
+    gameState,
+    turnPhase,
+    liveAgents: agents,
+    turnResult,
+    gmVisions,
+    gmStrategy,
+    loading,
+  } = state;
+  const { chooseNews } = actions;
+
   const canSelect = turnPhase === "select_news";
   const [showGameMaster, setShowGameMaster] = useState(false);
+
+  const handleSelectNews = (missionId: string) => {
+    if (!canSelect) return;
+    chooseNews(missionId as "real" | "fake" | "satirical");
+  };
 
   return (
     <div className="panel-paper flex flex-col overflow-hidden">
@@ -105,63 +112,22 @@ const PropagandaPanel = ({ missions, gameState, onSelectNews, turnPhase, agents,
           <h3 className="font-comic text-center text-xs mb-2">{tr("propa.news", lang)}</h3>
         </div>
 
-        {missions.map((m, index) => (
-          <div
-            key={m.id}
-            className={`border-[4px] transition-all duration-200 ${
-              m.inProgress ? "border-soviet-red bg-white" : "border-soviet-black bg-white hover:border-soviet-red-dark"
-            } ${!canSelect ? 'opacity-70' : ''}`}
-            style={{
-              animation: `news-enter 0.4s ease-out ${index * 0.1}s both`,
-              boxShadow: m.inProgress
-                ? '5px 5px 0px hsl(var(--red-soviet)), 0 0 20px hsl(var(--red-soviet) / 0.2)'
-                : '4px 4px 0px hsl(var(--black) / 0.3)',
-              transform: m.inProgress ? 'rotate(-0.5deg)' : 'none',
-            }}
-          >
-            <div className="relative overflow-hidden h-24">
-              {m.backendImage ? (
-                <img src={m.backendImage} alt={m.title}
-                  className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
-                  onError={(e) => { e.currentTarget.src = imageMap[m.image]; }} />
-              ) : imageMap[m.image] ? (
-                <img src={imageMap[m.image]} alt={m.title}
-                  className="w-full h-full object-cover transition-transform duration-300 hover:scale-105" />
-              ) : (
-                <div className="w-full h-full bg-soviet-black/80 animate-pulse flex items-center justify-center">
-                  <span className="text-secondary/30 text-[9px] font-heading tracking-wider">{tr("propa.generating", lang)}</span>
-                </div>
-              )}
-              {m.inProgress && (
-                <div className="absolute top-0 right-0 stamp text-[11px]"
-                  style={{ animation: 'stamp-appear 0.4s ease-out' }}>
-                  {tr("propa.inProgress", lang)}
-                </div>
-              )}
-              {m.recommended && !m.inProgress && (
-                <div className="absolute top-1 left-1 bg-soviet-red text-foreground text-[8px] font-heading px-1.5 py-0.5 tracking-wider"
-                  style={{ animation: 'stamp-appear 0.4s ease-out', boxShadow: '2px 2px 0px hsl(var(--black))' }}>
-                  ★ {lang === "fr" ? "CONSEILLÉ PAR LE POLITBURO" : "RECOMMENDED BY THE POLITBURO"}
-                </div>
-              )}
-            </div>
-
-            <div className="p-2">
-              <h3 className="text-soviet-red-dark text-[10px] font-heading font-bold leading-tight mb-1.5">
-                {m.title}
-              </h3>
-              <button
-                onClick={() => canSelect && onSelectNews(m.id)}
-                className={`btn-select-news w-full text-center px-3 py-1.5 text-[11px] font-bold tracking-wider ${
-                  !canSelect ? 'cursor-not-allowed' : ''
-                }`}
-                disabled={!canSelect}
-              >
-                {m.inProgress ? tr("propa.selected", lang) : tr("propa.select", lang)}
-              </button>
-            </div>
-          </div>
-        ))}
+        {/* Show skeleton while loading news */}
+        {loading.news && missions.length === 0 ? (
+          <NewsSkeletonGrid />
+        ) : (
+          missions.map((m, index) => (
+            <NewsCard
+              key={m.id}
+              mission={m}
+              index={index}
+              canSelect={canSelect}
+              loading={loading}
+              lang={lang}
+              onSelect={handleSelectNews}
+            />
+          ))
+        )}
       </div>
 
       {showGameMaster && (
@@ -174,5 +140,72 @@ const PropagandaPanel = ({ missions, gameState, onSelectNews, turnPhase, agents,
     </div>
   );
 };
+
+// Extracted NewsCard component for cleaner code
+interface NewsCardProps {
+  mission: NewsMission;
+  index: number;
+  canSelect: boolean;
+  loading: { images: boolean };
+  lang: "fr" | "en";
+  onSelect: (id: string) => void;
+}
+
+function NewsCard({ mission: m, index, canSelect, loading, lang, onSelect }: NewsCardProps) {
+  return (
+    <div
+      className={`border-[4px] transition-all duration-200 ${
+        m.inProgress ? "border-soviet-red bg-white" : "border-soviet-black bg-white hover:border-soviet-red-dark"
+      } ${!canSelect ? 'opacity-70' : ''}`}
+      style={{
+        animation: `news-enter 0.4s ease-out ${index * 0.1}s both`,
+        boxShadow: m.inProgress
+          ? '5px 5px 0px hsl(var(--red-soviet)), 0 0 20px hsl(var(--red-soviet) / 0.2)'
+          : '4px 4px 0px hsl(var(--black) / 0.3)',
+        transform: m.inProgress ? 'rotate(-0.5deg)' : 'none',
+      }}
+    >
+      <div className="relative w-full overflow-hidden h-24">
+        {m.backendImage ? (
+          <img src={m.backendImage} alt={m.title}
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+            onError={(e) => { e.currentTarget.src = imageMap[m.image]; }} />
+        ) : imageMap[m.image] && !loading.images ? (
+          <img src={imageMap[m.image]} alt={m.title}
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 hover:scale-105" />
+        ) : (
+          <ImageSkeleton className="h-24 w-full" aspectRatio="wide" />
+        )}
+        {m.inProgress && (
+          <div className="absolute top-0 right-0 stamp text-[11px]"
+            style={{ animation: 'stamp-appear 0.4s ease-out' }}>
+            {tr("propa.inProgress", lang)}
+          </div>
+        )}
+        {m.recommended && !m.inProgress && (
+          <div className="absolute top-1 left-1 bg-soviet-red text-foreground text-[8px] font-heading px-1.5 py-0.5 tracking-wider"
+            style={{ animation: 'stamp-appear 0.4s ease-out', boxShadow: '2px 2px 0px hsl(var(--black))' }}>
+            ★ {lang === "fr" ? "CONSEILLÉ PAR LE POLITBURO" : "RECOMMENDED BY THE POLITBURO"}
+          </div>
+        )}
+      </div>
+
+      <div className="p-2">
+        <h3 className="text-soviet-red-dark text-[10px] font-heading font-bold leading-tight mb-1.5">
+          {m.title}
+        </h3>
+        <button
+          onClick={() => canSelect && onSelect(m.id)}
+          className={`btn-select-news w-full text-center px-3 py-1.5 text-[11px] font-bold tracking-wider ${
+            !canSelect ? 'cursor-not-allowed' : ''
+          }`}
+          disabled={!canSelect}
+        >
+          {m.inProgress ? tr("propa.selected", lang) : tr("propa.select", lang)}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default PropagandaPanel;

@@ -3,17 +3,11 @@ import brainSoviet from "@/assets/brain_soviet.png";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useLang } from "@/i18n/LanguageContext";
 import { tr } from "@/i18n/translations";
+import { useGame } from "@/hooks/useGame";
+import type { GmTerminalLine } from "@/types/ws-events";
 
-export interface GmTerminalLine {
-  id: number;
-  type: "separator" | "phase" | "llm_call" | "tool_call" | "tool_result" | "llm_text" | "vision_update" | "choice_resolved" | "strategy" | "info";
-  text: string;
-}
-
-interface GmTerminalProps {
-  lines: GmTerminalLine[];
-  isStreaming: boolean;
-}
+// Re-export for backwards compatibility
+export type { GmTerminalLine } from "@/types/ws-events";
 
 const LEVEL1_TYPES = new Set<GmTerminalLine["type"]>(["choice_resolved", "strategy", "separator"]);
 const LEVEL2_TYPES = new Set<GmTerminalLine["type"]>(["llm_text", "vision_update", "phase", "llm_call", "tool_call", "tool_result", "info"]);
@@ -266,8 +260,11 @@ function renderLevel2Line(line: GmTerminalLine, lang: "fr" | "en"): JSX.Element 
   );
 }
 
-const GmTerminal = ({ lines, isStreaming }: GmTerminalProps) => {
+const GmTerminal = () => {
   const lang = useLang();
+  const { state } = useGame();
+  const { gmTerminalLines: lines, isStreaming } = state;
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const [journalOpen, setJournalOpen] = useState(true);
 

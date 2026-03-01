@@ -6,3 +6,5 @@ _bmad*
 swarm/fakenews-arena
 monitoring-sessions/data
 monitoring-sessions/examples
+swarm/sessions
+frontend/node_modules

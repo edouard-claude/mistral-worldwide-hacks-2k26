@@ -278,7 +278,7 @@ func runGame(sessionID string, lang string, rawNC *nats.Conn, mistral *MistralCl
 
 		// Natural selection (except last round) - determine BEFORE writing memories
 		var loserName, winnerName, cloneName string
-		if round < 5 {
+		if round < 10 {
 			loser := FindLoser(scores, session.Agents)
 			winner := FindWinner(scores, session.Agents)
 

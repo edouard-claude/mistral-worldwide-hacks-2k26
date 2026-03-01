@@ -1,5 +1,5 @@
 import type { GameState } from "@/data/gameData";
-import type { TurnPhase } from "@/hooks/useBackendEngine";
+import type { TurnPhase } from "@/types/ws-events";
 import type { Lang } from "@/i18n/translations";
 import { useLang } from "@/i18n/LanguageContext";
 import { tr } from "@/i18n/translations";

@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
-import type { GameState, DebateLine, NewsMission } from "@/data/gameData";
-import type { TurnPhase, TurnResult } from "@/hooks/useBackendEngine";
+import { useGame } from "@/hooks/useGame";
 import brainSoviet from "@/assets/brain_soviet.png";
 import { getAgentColor } from "@/lib/agentColors";
 import news1Img from "@/assets/news1.jpg";
@@ -25,16 +24,20 @@ const imageMap: Record<string, string> = {
 interface CenterPanelProps {
   visibleLines: number;
   activeDebateIndex: number;
-  debateLines: DebateLine[];
-  gameState: GameState;
-  turnPhase: TurnPhase;
-  turnResult: TurnResult | null;
-  selectedMission: NewsMission | null;
   gmTerminal?: ReactNode;
 }
 
-const CenterPanel = ({ visibleLines, activeDebateIndex, debateLines, gameState, turnPhase, turnResult, selectedMission, gmTerminal }: CenterPanelProps) => {
+const CenterPanel = ({ visibleLines, activeDebateIndex, gmTerminal }: CenterPanelProps) => {
   const lang = useLang();
+  const { state } = useGame();
+  const {
+    debateLines,
+    gameState,
+    turnPhase,
+    turnResult,
+    selectedMission,
+  } = state;
+
   const isGmPhase = turnPhase === "proposing" || (turnPhase === "debating" && debateLines.length === 0);
   const debateScrollRef = useRef<HTMLDivElement>(null);
 
@@ -136,7 +139,7 @@ const CenterPanel = ({ visibleLines, activeDebateIndex, debateLines, gameState, 
               : <><img src={brainSoviet} alt="" className="inline-block w-5 h-5 mr-1 -mt-0.5" /> {tr("center.gmReflection", lang)}</>}
           </h3>
           <span className="text-[10px] text-secondary/80 font-heading">
-            {tr("topbar.turn", lang)} {gameState.turn} — 
+            {tr("topbar.turn", lang)} {gameState.turn} —
             {turnPhase === "select_news" && ` ${tr("center.selectANews", lang)}`}
             {(turnPhase === "debating" && isGmPhase) && ` ${tr("center.gmThinking", lang)}`}
             {(turnPhase === "debating" && !isGmPhase) && ` ${tr("center.debateOngoing", lang)}`}

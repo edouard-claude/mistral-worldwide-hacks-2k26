@@ -1,6 +1,6 @@
-import { useState } from "react";
-import type { Agent, DebateLine, GameState } from "@/data/gameData";
-import type { TurnPhase, TurnResult, FallenAgent } from "@/hooks/useBackendEngine";
+import { useState, useMemo } from "react";
+import type { Agent, DebateLine } from "@/data/gameData";
+import { useGame } from "@/hooks/useGame";
 import agentKgb from "@/assets/agent_kgb.png";
 import agentSabot from "@/assets/agent_sabot.png";
 import agentPropa from "@/assets/agent_propa.png";
@@ -10,6 +10,7 @@ import HallOfHeroes from "./HallOfHeroes";
 import hallHeroesIcon from "@/assets/hall_heroes_icon.png";
 import { useLang } from "@/i18n/LanguageContext";
 import { tr } from "@/i18n/translations";
+import { AgentSkeletonGrid } from "@/components/skeletons/AgentSkeleton";
 
 const avatarMap: Record<string, string> = {
   ag1: agentKgb, ag2: agentSabot, ag3: agentPropa, ag4: agentMoustache,
@@ -25,21 +26,31 @@ function getAvatar(agent: Agent): string {
   return portraits[agent.name.length % portraits.length];
 }
 
-interface SwarmPanelProps {
-  agents: Agent[];
-  activeSpeaker: string | null;
-  activeSpeakerType: DebateLine["type"] | null;
-  turnResult: TurnResult | null;
-  turnPhase: TurnPhase;
-  politicalSpectrum: { label: string; value: number; color: string }[];
-  gameState: GameState;
-  fallenAgents: FallenAgent[];
-}
-
-const SwarmPanel = ({ agents, activeSpeaker, activeSpeakerType, turnResult, turnPhase, politicalSpectrum, fallenAgents }: SwarmPanelProps) => {
+const SwarmPanel = () => {
   const lang = useLang();
+  const { state } = useGame();
+  const {
+    liveAgents: agents,
+    debateLines,
+    turnResult,
+    turnPhase,
+    politicalSpectrum,
+    fallenAgents,
+    loading,
+  } = state;
+
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [showHall, setShowHall] = useState(false);
+
+  // Derive active speaker from last debate line
+  const { activeSpeaker, activeSpeakerType } = useMemo(() => {
+    if (debateLines.length === 0) return { activeSpeaker: null, activeSpeakerType: null };
+    const lastLine = debateLines[debateLines.length - 1];
+    return {
+      activeSpeaker: lastLine.agent,
+      activeSpeakerType: lastLine.type as DebateLine["type"],
+    };
+  }, [debateLines]);
 
   // Sort agents by debate ranking when available, otherwise by conviction
   const sortedAgents = turnResult?.ranking
@@ -99,6 +110,21 @@ const SwarmPanel = ({ agents, activeSpeaker, activeSpeakerType, turnResult, turn
     return idx >= 0 ? idx + 1 : getDefaultRank(agent);
   };
 
+  // Show skeleton when loading agents
+  if (loading.agents && agents.length === 0) {
+    return (
+      <div className="panel-paper flex flex-col overflow-hidden">
+        <div className="panel-header-dark">
+          <h2 className="font-comic text-comic-yellow text-base tracking-wider">{tr("swarm.title", lang)}</h2>
+          <span className="text-[9px] text-secondary font-heading">{tr("swarm.subtitle", lang)}</span>
+        </div>
+        <div className="p-3 overflow-y-auto flex-1">
+          <AgentSkeletonGrid />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="panel-paper flex flex-col overflow-hidden">
       <div className="panel-header-dark">
@@ -146,7 +172,7 @@ const SwarmPanel = ({ agents, activeSpeaker, activeSpeakerType, turnResult, turn
 
           return (
             <div
-              key={agent.id}
+              key={agent.id || `agent-${i}`}
               onClick={() => setSelectedAgent(agent)}
               className={`agent-card-ocre p-3 transition-all duration-300 cursor-pointer ${
                 agent.health < 30 ? "border-soviet-red" : ""

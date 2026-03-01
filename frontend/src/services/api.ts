@@ -1,90 +1,80 @@
 // Backend API client for Gorafi Simulator (Mistralski)
+// REST-only client — WebSocket events are handled by GameProvider
 
-const BASE_URL = "https://nondeficient-radioluminescent-cherry.ngrok-free.dev";
+import { API_BASE_URL, API_HEADERS } from "@/config/constants";
+import type { Lang } from "@/i18n/translations";
 
-const HEADERS = {
-  "ngrok-skip-browser-warning": "true",
-};
+const BASE_URL = API_BASE_URL;
+const HEADERS = API_HEADERS;
 
-export async function fetchApi<T = any>(path: string): Promise<T> {
+// ============================================================================
+// Generic Fetch
+// ============================================================================
+
+export async function fetchApi<T = unknown>(path: string): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, { headers: HEADERS });
   if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`);
   return res.json();
 }
 
-export interface SSEEvent {
-  type: string;
-  data: any;
-}
+// ============================================================================
+// REST Triggers (return 202, events come via WebSocket)
+// ============================================================================
 
 /**
- * Stream SSE events via fetch (EventSource doesn't support custom headers).
- * Calls onEvent for each parsed event, onDone when stream ends.
+ * Trigger proposal generation — returns 202, events arrive via WS
  */
-export async function streamSSE(
-  path: string,
-  onEvent: (evt: SSEEvent) => void,
-  onDone?: () => void,
-  onError?: (err: Error) => void,
-): Promise<void> {
-  try {
-    const response = await fetch(`${BASE_URL}${path}`, { headers: HEADERS });
-    if (!response.ok) {
-      throw new Error(`SSE error ${response.status}: ${response.statusText}`);
-    }
-    if (!response.body) {
-      throw new Error("No response body for SSE stream");
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let currentEventType = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        if (line.startsWith("event: ")) {
-          currentEventType = line.slice(7).trim();
-        } else if (line.startsWith("data: ")) {
-          const raw = line.slice(6);
-          try {
-            const data = JSON.parse(raw);
-            const type = currentEventType || data.type || "unknown";
-            onEvent({ type, data: typeof data === "object" && data.type ? data : data });
-          } catch {
-            // Non-JSON data, wrap as string
-            const type = currentEventType || "unknown";
-            onEvent({ type, data: raw });
-          }
-          currentEventType = "";
-        }
-      }
-    }
-
-    onDone?.();
-  } catch (err) {
-    onError?.(err as Error);
+export async function triggerPropose(sessionId: string, lang: Lang): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/propose?session_id=${sessionId}&lang=${lang}`, {
+    headers: HEADERS,
+  });
+  if (!res.ok && res.status !== 202) {
+    throw new Error(`Propose error ${res.status}: ${res.statusText}`);
   }
 }
 
-// --- API response types ---
+/**
+ * Trigger news choice resolution — returns 202, events arrive via WS
+ */
+export async function triggerChoose(
+  sessionId: string,
+  kind: "real" | "fake" | "satirical",
+  lang: Lang
+): Promise<void> {
+  const res = await fetch(
+    `${BASE_URL}/api/choose?session_id=${sessionId}&kind=${kind}&lang=${lang}`,
+    { headers: HEADERS }
+  );
+  if (!res.ok && res.status !== 202) {
+    throw new Error(`Choose error ${res.status}: ${res.statusText}`);
+  }
+}
+
+// ============================================================================
+// API Response Types
+// ============================================================================
 
 export interface BackendAgent {
-  id: string;
+  // Backend may send either id or agent_id
+  id?: string;
+  agent_id?: string;
   name: string;
-  health: number;
-  energy: number;
-  conviction: number;
-  selfishness: number;
-  status: string;
-  alive: boolean;
-  opinion: string;
+  // Direct stats (from swarm) or nested stats object (from mistralski)
+  health?: number;
+  energy?: number;
+  conviction?: number;
+  selfishness?: number;
+  stats?: {
+    croyance?: number;
+    confiance?: number;
+    richesse?: number;
+  };
+  status?: string;
+  status_text?: string;
+  personality?: string;
+  alive?: boolean;
+  is_neutralized?: boolean;
+  opinion?: string;
   avatar?: string;
 }
 
@@ -105,8 +95,8 @@ export interface StartResponse {
 }
 
 export interface NewsProposal {
-  real: { text: string; body: string; stat_impact: any };
-  fake: { text: string; body: string; stat_impact: any };
-  satirical: { text: string; body: string; stat_impact: any };
+  real: { text: string; body: string; stat_impact: Record<string, number> };
+  fake: { text: string; body: string; stat_impact: Record<string, number> };
+  satirical: { text: string; body: string; stat_impact: Record<string, number> };
   gm_commentary: string;
 }

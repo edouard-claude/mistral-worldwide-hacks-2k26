@@ -16,7 +16,7 @@ It is an **autonomous agent** with persistent memory, per-agent vision files, an
 
 ```
 ┌────────────┐     SSE      ┌──────────────┐    HTTP+WS    ┌──────────────┐
-│  Frontend   │ ◄──────────► │  Mistralski  │ ◄───────────► │  wh26 relay  │
+│  Frontend  │ ◄──────────► │  Mistralski  │ ◄───────────► │  wh26 relay  │
 │  (React)   │              │  play_web.py │               │  (Go backend)│
 └────────────┘              └──────┬───────┘               └──────┬───────┘
                                    │                              │
