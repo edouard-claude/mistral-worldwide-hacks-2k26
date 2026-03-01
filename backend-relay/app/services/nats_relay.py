@@ -83,19 +83,26 @@ class NatsRelay:
                 self._sessions.pop(session_id, None)
         logger.info("Client unregistered from session %s", session_id)
 
-    async def publish_init(self, session_id: str) -> None:
+    async def publish_init(self, session_id: str, query_params: dict | None = None) -> None:
         if not self._nc.is_connected:
             raise RuntimeError("NATS is not connected")
         topic = "arena.init"
-        payload = json.dumps({"session_id": session_id}).encode("utf-8")
+        payload_dict: dict = {"session_id": session_id}
+        if query_params:
+            payload_dict["query_params"] = query_params
+        payload = json.dumps(payload_dict).encode("utf-8")
         await self._nc.publish(topic, payload)
         logger.info("Published init to %s for session %s", topic, session_id)
 
-    async def publish_fakenews(self, session_id: str, content: str) -> None:
+    async def publish_fakenews(self, session_id: str, content: str, query_params: dict | None = None) -> None:
         if not self._nc.is_connected:
             raise RuntimeError("NATS is not connected")
         topic = f"arena.{session_id}.input.fakenews"
-        await self._nc.publish(topic, content.encode("utf-8"))
+        payload_dict: dict = {"content": content}
+        if query_params:
+            payload_dict["query_params"] = query_params
+        payload = json.dumps(payload_dict).encode("utf-8")
+        await self._nc.publish(topic, payload)
         logger.info("Published fakenews to %s", topic)
 
     async def disconnect(self) -> None:
