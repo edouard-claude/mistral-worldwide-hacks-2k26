@@ -2,7 +2,7 @@
 // Provides simple access to game state and actions
 
 import { useContext } from "react";
-import { GameContext, type GameContextValue, type GameActions } from "@/context/GameProvider";
+import { GameContext, type GameContextValue, type GameActions } from "@/context/GameContext";
 import type { FullGameState } from "@/reducers/gameReducer";
 
 /**
@@ -41,7 +41,7 @@ export function useGameActions(): GameActions {
 
 // Re-export types for convenience
 export type { FullGameState } from "@/reducers/gameReducer";
-export type { GameActions, GameContextValue } from "@/context/GameProvider";
+export type { GameActions, GameContextValue } from "@/context/GameContext";
 export type {
   TurnPhase,
   WsStatus,

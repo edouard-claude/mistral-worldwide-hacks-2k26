@@ -1,37 +1,16 @@
 // GameProvider — React Context with WebSocket connection management
 // Replaces useBackendEngine with a cleaner architecture
 
-import React, { createContext, useReducer, useEffect, useRef, useCallback, useMemo } from "react";
-import { gameReducer, initialGameState, type FullGameState } from "@/reducers/gameReducer";
-import type { GameAction, TurnPhase } from "@/types/ws-events";
+import React, { useReducer, useEffect, useRef, useCallback, useMemo } from "react";
+import { gameReducer, initialGameState } from "@/reducers/gameReducer";
+import type { GameAction } from "@/types/ws-events";
 import { fetchApi, triggerPropose, triggerChoose, type StartResponse } from "@/services/api";
 import { API_BASE_URL, WS_BASE_URL } from "@/config/constants";
 import { tr, type Lang } from "@/i18n/translations";
+import { GameContext, type GameActions, type GameContextValue } from "./GameContext";
 
-// ============================================================================
-// Context Types
-// ============================================================================
-
-export interface GameActions {
-  startGame: (lang?: Lang) => Promise<void>;
-  chooseNews: (kind: "real" | "fake" | "satirical") => void;
-  nextTurn: () => void;
-  restartGame: () => void;
-  dismissChaosEvent: () => void;
-  changeLang: (lang: Lang) => void;
-}
-
-export interface GameContextValue {
-  state: FullGameState;
-  dispatch: React.Dispatch<GameAction>;
-  actions: GameActions;
-}
-
-// ============================================================================
-// Context
-// ============================================================================
-
-export const GameContext = createContext<GameContextValue | null>(null);
+// Re-export types and context for backward compatibility
+export { GameContext, type GameActions, type GameContextValue } from "./GameContext";
 
 // ============================================================================
 // Provider
