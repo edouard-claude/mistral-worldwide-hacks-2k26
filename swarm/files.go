@@ -143,7 +143,7 @@ func WriteAgentFiles(agent *Agent, session *Session) error {
 
 	// Write SOUL.md
 	soulPath := filepath.Join(agent.SessionDir, "SOUL.md")
-	if err := WriteFile(soulPath, GenerateSoulMD(agent.Name, agent.PoliticalColor)); err != nil {
+	if err := WriteFile(soulPath, GenerateSoulMD(agent.Name, agent.PoliticalColor, session.Lang)); err != nil {
 		return fmt.Errorf("failed to write SOUL.md: %w", err)
 	}
 
@@ -165,13 +165,13 @@ func WriteMemory(agent *Agent, round int, content string) error {
 // WriteChat writes a chat file for a round/phase
 func WriteChat(session *Session, round, phase int, messages []*AgentMessage) error {
 	chatPath := filepath.Join(session.Dir, "chat", fmt.Sprintf("T%d_phase%d.md", round, phase))
-	return WriteFile(chatPath, GenerateChatMD(round, phase, messages))
+	return WriteFile(chatPath, GenerateChatMD(round, phase, messages, session.Lang))
 }
 
 // WriteDeath writes DEATH.md for a dead agent
-func WriteDeath(agent *Agent, round, score, lastConfidence int, lastMessage string, rankings map[string]int) error {
+func WriteDeath(agent *Agent, round, score, lastConfidence int, lastMessage string, rankings map[string]int, lang string) error {
 	deathPath := filepath.Join(agent.SessionDir, "DEATH.md")
-	return WriteFile(deathPath, GenerateDeathMD(agent, round, score, lastConfidence, lastMessage, rankings))
+	return WriteFile(deathPath, GenerateDeathMD(agent, round, score, lastConfidence, lastMessage, rankings, lang))
 }
 
 // BuildSystemPrompt builds the system prompt for an agent

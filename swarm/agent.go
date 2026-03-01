@@ -113,7 +113,7 @@ func KillAgent(agent *Agent, session *Session, round int, score *AgentScore, las
 	if score != nil {
 		scoreVal = score.TotalPoints
 	}
-	if err := WriteDeath(agent, round, scoreVal, lastConfidence, lastMessage, rankings); err != nil {
+	if err := WriteDeath(agent, round, scoreVal, lastConfidence, lastMessage, rankings, session.Lang); err != nil {
 		return fmt.Errorf("failed to write DEATH.md: %w", err)
 	}
 

@@ -9,19 +9,25 @@ import (
 )
 
 // NewSession creates a new game session with auto-generated UUID
-func NewSession(fakeNews, baseDir string) (*Session, error) {
-	return NewSessionWithID(generateUUID(), fakeNews, baseDir)
+func NewSession(fakeNews, baseDir, lang string) (*Session, error) {
+	return NewSessionWithID(generateUUID(), fakeNews, baseDir, lang)
 }
 
 // NewSessionWithID creates a new game session with a specific session ID
-func NewSessionWithID(sessionID, fakeNews, baseDir string) (*Session, error) {
+func NewSessionWithID(sessionID, fakeNews, baseDir, lang string) (*Session, error) {
 	sessionDir := filepath.Join(baseDir, "sessions", sessionID)
+
+	// Default language is French
+	if lang == "" {
+		lang = "fr"
+	}
 
 	session := &Session{
 		ID:        sessionID,
 		FakeNews:  fakeNews,
 		Round:     0,
 		Graveyard: make([]*Agent, 0),
+		Lang:      lang,
 		Dir:       sessionDir,
 	}
 
@@ -72,11 +78,18 @@ func LoadSession(sessionID, baseDir string) (*Session, error) {
 		return nil, fmt.Errorf("failed to parse global.json: %w", err)
 	}
 
+	// Default language for backward compatibility
+	lang := state.Lang
+	if lang == "" {
+		lang = "fr"
+	}
+
 	session := &Session{
 		ID:        state.SessionID,
 		FakeNews:  state.FakeNews,
 		Round:     state.Round,
 		Graveyard: state.Graveyard,
+		Lang:      lang,
 		Dir:       sessionDir,
 	}
 
@@ -96,7 +109,7 @@ func LoadSession(sessionID, baseDir string) (*Session, error) {
 
 // GetOrCreateSession loads an existing session or creates a new one
 // Returns (session, resumed, error) where resumed is true if session was loaded
-func GetOrCreateSession(sessionID, baseDir string) (*Session, bool, error) {
+func GetOrCreateSession(sessionID, baseDir, lang string) (*Session, bool, error) {
 	globalPath := filepath.Join(baseDir, "sessions", sessionID, "global.json")
 
 	if _, err := os.Stat(globalPath); err == nil {
@@ -109,7 +122,7 @@ func GetOrCreateSession(sessionID, baseDir string) (*Session, bool, error) {
 	}
 
 	// Session doesn't exist, create new one
-	session, err := NewSessionWithID(sessionID, "(interactive)", baseDir)
+	session, err := NewSessionWithID(sessionID, "(interactive)", baseDir, lang)
 	if err != nil {
 		return nil, false, err
 	}
@@ -127,6 +140,7 @@ func SaveGlobalState(session *Session) error {
 		FakeNews:  session.FakeNews,
 		Round:     session.Round,
 		Phase:     0,
+		Lang:      session.Lang,
 		Agents:    agents,
 		Graveyard: session.Graveyard,
 	}
