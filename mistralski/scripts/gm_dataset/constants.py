@@ -158,9 +158,6 @@ EARLY_TURNS: Final[range] = range(1, 4)    # 1-3
 MID_TURNS: Final[range] = range(4, 7)      # 4-6
 LATE_TURNS: Final[range] = range(7, 11)    # 7-10
 
-# --- vLLM config (Qwen 3.5 on Scaleway H100) ---
-VLLM_BASE_URL: Final[str] = "http://51.159.151.86:8000"
-VLLM_API_KEY: Final[str] = "5y4q9PK47Qg04c74nghSYzEWHKCAT0TLYX5tqYCJ"
 VLLM_MODEL: Final[str] = "Qwen/Qwen3.5-35B-A3B"
 GENERATION_TEMPERATURE: Final[float] = 0.9
 GENERATION_MAX_TOKENS: Final[int] = 2048
