@@ -24,6 +24,7 @@ def _get_sm(request: Request) -> SessionManager:
 async def start_game(request: Request, lang: str = "fr") -> JSONResponse:
     gm = _get_gm(request)
     sm = _get_sm(request)
+    nats_relay = request.app.state.nats_relay
 
     try:
         result = await gm.start_game(lang)
@@ -39,6 +40,14 @@ async def start_game(request: Request, lang: str = "fr") -> JSONResponse:
             session.gm_session_id = gm_session_id
         except FileExistsError:
             pass  # Session already exists, that's fine
+
+        # Publish init to NATS so swarm starts listening for this session
+        if nats_relay.is_connected:
+            try:
+                await nats_relay.publish_init(gm_session_id, {"lang": lang})
+                logger.info("Published arena.init for session %s", gm_session_id)
+            except Exception:
+                logger.exception("Failed to publish arena.init for session %s", gm_session_id)
 
     return JSONResponse(content=result)
 
