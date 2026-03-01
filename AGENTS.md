@@ -232,9 +232,122 @@ Au tour suivant, **toute cette mémoire est injectée dans le system prompt**. L
 
 ---
 
-## PARTIE 2 — MISTRALSKI (Game Master Agent)
+## PARTIE 2 — LE MODÈLE FINE-TUNÉ : GÉNÉRATION DE TITRES SATIRIQUES
 
-### 2.1 Modèle et infrastructure
+### 2.0.1 Pourquoi un modèle fine-tuné ?
+
+Mistral Large est excellent pour le raisonnement et la stratégie, mais générer des titres satiriques de qualité Gorafi est un art spécifique. Plutôt que de surcharger le prompt du GM avec des instructions de style, on a **fine-tuné un modèle dédié** qui produit des titres de qualité professionnelle en <1 seconde.
+
+### 2.0.2 Pipeline de données d'entraînement
+
+Le dataset a été construit par un pipeline en 4 étapes :
+
+```
+1. SCRAPING    — Sources satiriques et factuelles
+   ├── Le Gorafi (legorafi.fr/feed/) — 40 titres satiriques FR hardcodés + RSS live
+   ├── The Onion (theonion.com/rss)  — 30 titres traduits FR + RSS live
+   └── Real news (France Info, Reuters) — 30 titres factuels comme inspiration
+
+2. SCÉNARIOS   — Génération déterministe de 240 situations de jeu
+   ├── 4 types de sortie GM : temperature, headlines, reaction, narrative
+   ├── Couverture : 15 pays × 20 actions × 10 agents × 3 phases de jeu
+   └── Seed 42 pour reproductibilité (200 train + 40 val)
+
+3. GÉNÉRATION  — vLLM (Qwen 3.5-35B) génère les réponses GM parfaites
+   ├── Batch inference : 10 requêtes parallèles
+   ├── Meta-teacher prompt : force le JSON valide + la qualité satirique
+   └── Validation Pydantic stricte (schéma HeadlineOutput avec virality, stat_impact, etc.)
+
+4. EXPORT      — Format JSONL Mistral fine-tuning
+   └── Paires (system + user → assistant) validées et dédupliquées
+```
+
+**Sources de scraping** :
+
+| Source | Style | Usage |
+|--------|-------|-------|
+| **Le Gorafi** | `gorafi` | Satire absurde française — sert de modèle de ton |
+| **The Onion** | `onion` | Satire anglo-saxonne traduite — ton factuel-absurde |
+| **France Info / Reuters** | `raw` | Vrais titres — servent de `source_real` (le vrai titre détourné) |
+
+Le pipeline enrichit les 100+ seed headlines par des titres RSS dynamiques, créant un dataset varié et ancré dans l'actualité.
+
+### 2.0.3 Fine-tuning du modèle
+
+| Paramètre | Valeur |
+|-----------|--------|
+| **Modèle de base** | `mistralai/Mistral-7B-Instruct-v0.3` |
+| **Méthode** | LoRA (Low-Rank Adaptation), rang r=8 |
+| **Dataset** | 2 304 train / 255 validation |
+| **Durée** | 25 min 06s (1 506s) |
+| **Débit** | 4.59 samples/s |
+
+**Progression de la loss** :
+
+```
+Epoch   │ Train Loss │ Token Acc │ Eval Loss │ Eval Acc
+────────┼────────────┼───────────┼───────────┼─────────
+0 (init)│    4.09    │   43%     │    —      │    —
+1       │    0.42    │   91%     │   0.411   │  90.9%
+2       │    0.27    │   94%     │   0.283   │  93.6%
+3 (fin) │    0.24    │   94.5%   │   0.266   │  94.1%
+```
+
+Pas d'overfitting : l'eval loss suit la train loss proprement. Le modèle a été poussé sur `Laroub10/news-title-mistral-ft`.
+
+### 2.0.4 Le système de scores — levier stratégique du GM
+
+Le fine-tuned model expose un endpoint `POST /generate` avec un paramètre **`score`** (0–100) qui contrôle le degré de crédibilité du titre généré :
+
+```
+Score 90 → Titre RÉALISTE       "Le G7 adopte un plan de lutte contre la désinformation"
+Score 40 → Titre PLAUSIBLE-FAUX "Selon une étude confidentielle, les réseaux sociaux..."
+Score 5  → Titre ABSURDE-GORAFI "Le Sénat vote l'interdiction de critiquer le Sénat"
+```
+
+| Score | Type de news | Description | Rôle stratégique |
+|-------|-------------|-------------|-----------------|
+| **90** | `real` | Titre crédible, ton journalistique | Inspirer confiance, baisser la garde du joueur |
+| **40** | `fake` | Titre plausible mais faux | Zone grise — le joueur hésite |
+| **5** | `satirical` | Titre absurde pur Gorafi | Pièce appétissante — le joueur veut le publier pour rire |
+
+**Comment le GM exploite les scores** :
+
+Le Game Master reçoit les titres candidats du fine-tuned model (3 par catégorie, soit 9 titres) et **choisit le set thématiquement optimal** en fonction de sa stratégie de manipulation :
+
+- Si `manipulation_tactic = "psychologie inversée"` → il rend le titre fake (score 40) plus attirant en écrivant un body captivant, et qualifie le titre real (score 90) de "ennuyeux" dans son commentaire
+- Si `manipulation_tactic = "flatterie"` → il sélectionne un titre satirique (score 5) qui flatte l'ego du joueur-dictateur
+- Si `manipulation_tactic = "provocation"` → il choisit un titre fake sur un sujet clivant
+
+Le score n'est pas visible du joueur — il ne voit que le titre final et le commentaire du GM. Le score est un **outil interne** qui garantit que chaque catégorie de news a le bon niveau de crédibilité, indépendamment du talent d'écriture du LLM.
+
+### 2.0.5 Intégration dans le flow du jeu
+
+```
+T+0s    3 appels parallèles au fine-tuned model :
+        ├── POST /generate {score: 90, lang: "fr", n: 3}  → 3 titres réalistes
+        ├── POST /generate {score: 40, lang: "fr", n: 3}  → 3 titres fake
+        └── POST /generate {score: 5,  lang: "fr", n: 3}  → 3 titres satiriques
+        Total : ~1-2 secondes
+
+T+2s    Mistral Large reçoit les 9 titres candidats + mémoire pré-chargée
+        → Choisit le meilleur set thématique
+        → Écrit les bodies + stat_impact + gm_commentary
+        → Applique sa manipulation_tactic
+
+T+12-15s  Proposition finale envoyée au joueur (3 news avec titres + bodies + images)
+```
+
+Le fine-tuned model **élimine le bottleneck de génération de titres** : au lieu de demander à Mistral Large de tout faire (titres + bodies + stratégie), chaque modèle fait ce qu'il fait le mieux :
+- **Fine-tuned 7B** : titres percutants, calibrés par score (< 1s)
+- **Mistral Large** : raisonnement stratégique, manipulation, bodies (10-15s)
+- **Flux** : images propaganda soviétiques (10-15s, en parallèle)
+
+---
+
+## PARTIE 3 — MISTRALSKI (Game Master Agent)
+
+### 3.1 Modèle et infrastructure
 
 - **Modèle LLM** : Mistral Large (via API Mistral, `mistral-large-latest`)
 - **Runtime** : Python 3.11+, FastAPI, async
@@ -243,7 +356,7 @@ Au tour suivant, **toute cette mémoire est injectée dans le system prompt**. L
 - **Streaming** : SSE temps réel vers le frontend
 - **Mémoire** : fichiers locaux (JSON + Markdown)
 
-### 2.2 Personnalité : Eric Cartman en Game Master
+### 3.2 Personnalité : Eric Cartman en Game Master
 
 Le GM joue le rôle d'**Eric Cartman** (South Park), reconverti en maître du jeu. Son prompt système :
 
@@ -255,7 +368,7 @@ Traits de personnalité injectés :
 - **Vindicatif** : se souvient des agents qui l'ont contrarié
 - **Showman** : ses commentaires sont des spectacles
 
-### 2.3 Les 5 outils (function calling)
+### 3.3 Les 5 outils (function calling)
 
 Le GM dispose de 5 tools que le LLM appelle **de sa propre initiative** :
 
@@ -269,7 +382,7 @@ Le GM dispose de 5 tools que le LLM appelle **de sa propre initiative** :
 
 **Le LLM est autonome** : c'est lui qui décide de lire ou non sa mémoire, de consulter ou non un dossier agent, de mettre à jour ses visions. L'orchestrateur ne force rien — il fournit les outils et laisse l'agent raisonner.
 
-### 2.4 Le système de manipulation secrète
+### 3.4 Le système de manipulation secrète
 
 Le GM maintient deux champs **jamais envoyés au frontend** :
 
@@ -283,7 +396,7 @@ Au tour suivant, le GM **applique la tactique** :
 
 Le joueur ne sait **jamais** qu'il est manipulé. La révélation arrive uniquement en fin de partie.
 
-### 2.5 Les dossiers agents (Vision Files)
+### 3.5 Les dossiers agents (Vision Files)
 
 Le GM maintient un **dossier secret** par agent de l'arène, écrit en markdown libre par le LLM via `update_agent_vision`. Structure type :
 
@@ -311,7 +424,7 @@ pour l'attirer, puis le retourner avec des données contradictoires.
 
 Ces dossiers **persistent entre les tours**. Le GM accumule de l'intelligence sur chaque agent au fil de la partie.
 
-### 2.6 Cycle complet d'un tour GM
+### 3.6 Cycle complet d'un tour GM
 
 ```
 PROPOSE NEWS (45s → optimisé à 15s)
@@ -343,7 +456,7 @@ STRATEGIZE (50s → optimisé à 15s)
 └── 3. Écriture des visions + mémoire cumulative
 ```
 
-### 2.7 État du monde : les indices globaux
+### 3.7 État du monde : les indices globaux
 
 Le GM gère 4 indices mondiaux (0–100) que chaque news impacte :
 
@@ -356,7 +469,7 @@ Le GM gère 4 indices mondiaux (0–100) que chaque news impacte :
 
 Le **INDICE MONDIAL DE DÉCÉRÉBRATION** est le score composite. L'objectif "victoire" = atteindre 100.
 
-### 2.8 Révélation de fin de partie
+### 3.8 Révélation de fin de partie
 
 Quand la partie se termine (10 tours ou condition de fin), le GM émet un event `game_over_reveal` :
 
@@ -388,9 +501,9 @@ Verdicts :
 
 ---
 
-## PARTIE 3 — L'INFORMATION INCOMPLÈTE : LE COEUR DU SYSTÈME
+## PARTIE 4 — L'INFORMATION INCOMPLÈTE : LE COEUR DU SYSTÈME
 
-### 3.1 Qui voit quoi ?
+### 4.1 Qui voit quoi ?
 
 | Information | Joueur | GM | Agents | Frontend |
 |-------------|--------|-----|--------|----------|
@@ -405,7 +518,7 @@ Verdicts :
 | Score de chaque agent | Après le tour | Oui | Après le tour (mémoire) | Oui |
 | Couleur politique des agents | Non directement | Oui (dossiers) | La sienne uniquement | Spectre affiché |
 
-### 3.2 Asymétrie d'information → comportement émergent
+### 4.2 Asymétrie d'information → comportement émergent
 
 Cette architecture produit des **comportements émergents non programmés** :
 
@@ -418,9 +531,9 @@ Cette architecture produit des **comportements émergents non programmés** :
 
 ---
 
-## PARTIE 4 — USE CASES PROFESSIONNELS
+## PARTIE 5 — USE CASES PROFESSIONNELS
 
-### 4.1 Recrutement et évaluation de candidats
+### 5.1 Recrutement et évaluation de candidats
 
 **Pattern** : N candidats débattent un cas business. Chaque candidat est un agent LLM paramétré avec le CV et le profil du candidat. Après 4 phases de débat, les agents se classent mutuellement.
 
@@ -428,7 +541,7 @@ Cette architecture produit des **comportements émergents non programmés** :
 
 **Information incomplète** : chaque candidat-agent ne voit que les arguments publics, pas les critères internes de scoring.
 
-### 4.2 War gaming stratégique
+### 5.2 War gaming stratégique
 
 **Pattern** : 4 agents jouent différents acteurs géopolitiques ou business (concurrent A, concurrent B, régulateur, client). Un GM injecte des scénarios (nouvelle réglementation, crise, innovation disruptive). Les agents débattent et votent sur les réponses.
 
@@ -436,7 +549,7 @@ Cette architecture produit des **comportements émergents non programmés** :
 
 **Information incomplète** : chaque acteur ne connaît que les communications publiques des autres, pas leur stratégie interne.
 
-### 4.3 Red teaming et adversarial testing
+### 5.3 Red teaming et adversarial testing
 
 **Pattern** : un agent "attaquant" (le GM) tente de manipuler un groupe d'agents "défenseurs" en injectant de la désinformation. Les défenseurs doivent identifier et résister à la manipulation.
 
@@ -444,7 +557,7 @@ Cette architecture produit des **comportements émergents non programmés** :
 
 **Information incomplète** : les défenseurs ne savent pas qu'ils sont sous attaque ciblée ni quelle est la tactique utilisée.
 
-### 4.4 Consensus building avec trace de raisonnement
+### 5.4 Consensus building avec trace de raisonnement
 
 **Pattern** : N experts-agents avec des perspectives différentes (technique, business, juridique, UX) débattent une décision produit. Chaque agent a un SOUL.md calibré sur l'expertise et les biais du rôle.
 
@@ -452,19 +565,19 @@ Cette architecture produit des **comportements émergents non programmés** :
 
 **Information incomplète** : chaque expert ne voit que les arguments, pas les scores de conviction internes → force l'argumentation plutôt que l'argument d'autorité.
 
-### 4.5 Formation à la négociation
+### 5.5 Formation à la négociation
 
 **Pattern** : un humain négocie face à des agents LLM qui incarnent des parties prenantes (syndicat, actionnaire, fournisseur). Le GM observe et adapte la difficulté en renforçant les agents les plus résistants (clonage).
 
 **Avantage** : la pression de survie rend les agents-adversaires réalistes. Ils s'adaptent, forment des coalitions, et le mécanisme de clonage amplifie les styles de négociation les plus efficaces.
 
-### 4.6 Détection de biais dans les LLM
+### 5.6 Détection de biais dans les LLM
 
 **Pattern** : injecter le même sujet controversé dans des agents avec des SOUL.md variés (cultures, genres, âges, professions). Observer la dérive politique et les patterns de vote.
 
 **Avantage** : le système de vote mutuel + mutation politique révèle quels biais sont les plus "contagieux" dans les LLM. La sélection naturelle montre quelles perspectives dominent quand on laisse les modèles interagir librement.
 
-### 4.7 Avantages fondamentaux de l'architecture
+### 5.7 Avantages fondamentaux de l'architecture
 
 | Propriété | Mécanisme | Valeur pro |
 |-----------|-----------|------------|
@@ -479,22 +592,22 @@ Cette architecture produit des **comportements émergents non programmés** :
 
 ---
 
-## PARTIE 5 — SYNTHÈSE TECHNIQUE
+## PARTIE 6 — SYNTHÈSE TECHNIQUE
 
 ### Stack par agent
 
-| Composant | Agents Swarm | GM Mistralski |
-|-----------|-------------|---------------|
-| Modèle | Mistral Small 3.2 | Mistral Large |
-| Function calling | Non | Oui (5 tools) |
-| Température | 0.50–0.70 (selon position) | 0.85 |
-| Max tokens/réponse | 650 | 4096 |
-| Concurrence | 4 goroutines par phase | Async Python |
-| Mémoire court terme | memory/T{n}.md | turn_{n}.json |
-| Mémoire long terme | SOUL.md (immutable) | cumulative.json + vision_*.md |
-| Persistance | Markdown files | JSON + Markdown files |
-| Communication | NATS pub/sub | SSE + HTTP |
-| Autonomie | Raisonne sur base de son SOUL | Choisit ses tools, écrit ses dossiers |
+| Composant | Agents Swarm | GM Mistralski | Fine-tuned Titres |
+|-----------|-------------|---------------|-------------------|
+| Modèle | Mistral Small 3.2 | Mistral Large | Mistral 7B + LoRA |
+| Function calling | Non | Oui (5 tools) | Non |
+| Température | 0.50–0.70 | 0.85 | Contrôlée par score |
+| Max tokens/réponse | 650 | 4096 | ~50 (titre seul) |
+| Concurrence | 4 goroutines/phase | Async Python | 3 appels parallèles |
+| Mémoire court terme | memory/T{n}.md | turn_{n}.json | Stateless |
+| Mémoire long terme | SOUL.md (immutable) | cumulative.json + vision_*.md | Entraîné sur corpus |
+| Persistance | Markdown files | JSON + Markdown files | Aucune |
+| Communication | NATS pub/sub | SSE + HTTP | HTTP POST /generate |
+| Autonomie | Raisonne sur base de son SOUL | Choisit ses tools, écrit ses dossiers | Génère selon score |
 
 ### Flux de données complet
 
