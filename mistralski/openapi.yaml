@@ -1,0 +1,336 @@
+openapi: 3.1.0
+info:
+  title: Gorafi Simulator - Game Master API
+  description: |
+    API du simulateur satirique "Gorafi Simulator".
+    Le Game Master (GM) propose des news et réagit aux choix du joueur via streaming SSE.
+  version: 1.0.0
+  contact:
+    name: Edouard
+servers:
+  - url: https://gm-mistralski.wh26.edouard.cl
+    description: Production (CapRover)
+  - url: http://localhost:8899
+    description: Local development
+
+paths:
+  /:
+    get:
+      summary: Page HTML principale
+      description: Interface web du simulateur (SPA embarquée)
+      operationId: getIndex
+      responses:
+        "200":
+          description: Page HTML du jeu
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /api/start:
+    get:
+      summary: Démarrer une nouvelle partie
+      description: Initialise le Game Master, réinitialise l'état du jeu et retourne les données initiales.
+      operationId: startGame
+      parameters:
+        - name: lang
+          in: query
+          description: Langue du jeu
+          required: false
+          schema:
+            type: string
+            enum: [fr, en]
+            default: fr
+      responses:
+        "200":
+          description: Partie initialisée
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartResponse"
+
+  /api/state:
+    get:
+      summary: État actuel du jeu
+      description: Retourne l'état courant (tour, indices, agents, fin de partie).
+      operationId: getState
+      responses:
+        "200":
+          description: État du jeu
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameStateResponse"
+
+  /api/wh26:
+    get:
+      summary: Status de connexion wh26
+      description: Monitor la connexion au backend wh26 (arena multi-agents).
+      operationId: getWh26Status
+      responses:
+        "200":
+          description: Status de connexion
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  connected:
+                    type: boolean
+                  wh26_url:
+                    type: string
+                  arena_session_id:
+                    type: string
+
+  /api/stream/propose:
+    get:
+      summary: Proposer les news (SSE)
+      description: |
+        Stream SSE du processus de génération des 3 news par le Game Master.
+        Émet des événements en temps réel (phases, appels LLM, tool calls, proposal final).
+      operationId: streamPropose
+      parameters:
+        - name: lang
+          in: query
+          description: Langue des news générées
+          required: false
+          schema:
+            type: string
+            enum: [fr, en]
+            default: fr
+      responses:
+        "200":
+          description: Stream SSE des événements
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/SSEEvent"
+
+  /api/stream/choose:
+    get:
+      summary: Résoudre le choix du joueur (SSE)
+      description: |
+        Stream SSE de la résolution du choix.
+        Inclut: réaction GM, réactions agents, mise à jour indices, stratégie GM, passage au tour suivant.
+      operationId: streamChoose
+      parameters:
+        - name: kind
+          in: query
+          description: Type de news choisie
+          required: true
+          schema:
+            type: string
+            enum: [real, fake, satirical]
+        - name: lang
+          in: query
+          description: Langue
+          required: false
+          schema:
+            type: string
+            enum: [fr, en]
+            default: fr
+      responses:
+        "200":
+          description: Stream SSE des événements de résolution
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/SSEEvent"
+
+  /api/images/{session_id}/{filename}:
+    get:
+      summary: Récupérer une image générée
+      description: Sert les posters de propagande générés par Mistral (style soviétique).
+      operationId: getImage
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: filename
+          in: path
+          required: true
+          description: "Nom du fichier (ex: real.png, fake.png, satirical.png)"
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Image PNG
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Image non trouvée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
+components:
+  schemas:
+    StartResponse:
+      type: object
+      required: [session_id, turn, max_turns, indices, decerebration, agents, lang]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+          description: ID de session unique
+        turn:
+          type: integer
+          description: Tour actuel (commence à 1)
+        max_turns:
+          type: integer
+          description: Nombre maximum de tours (10 par défaut)
+        indices:
+          $ref: "#/components/schemas/GlobalIndices"
+        decerebration:
+          type: number
+          description: Indice mondial de décérébration (0-100)
+        agents:
+          type: array
+          items:
+            $ref: "#/components/schemas/Agent"
+        lang:
+          type: string
+          enum: [fr, en]
+
+    GameStateResponse:
+      type: object
+      properties:
+        turn:
+          type: integer
+        max_turns:
+          type: integer
+        indices:
+          $ref: "#/components/schemas/GlobalIndices"
+        decerebration:
+          type: number
+        agents:
+          type: array
+          items:
+            $ref: "#/components/schemas/Agent"
+        ended:
+          type: boolean
+          description: True si la partie est terminée
+
+    GlobalIndices:
+      type: object
+      description: Indices mondiaux du jeu
+      properties:
+        credibilite:
+          type: number
+          description: Crédibilité des médias (0-100)
+        rage:
+          type: number
+          description: Niveau de rage populaire (0-100)
+        complotisme:
+          type: number
+          description: Niveau de complotisme (0-100)
+        esperance_democratique:
+          type: number
+          description: Espérance démocratique (0-100, game over si <= 0)
+
+    Agent:
+      type: object
+      properties:
+        agent_id:
+          type: string
+          description: ID unique de l'agent (ex. agent_01)
+        name:
+          type: string
+          description: Nom de l'agent
+        personality:
+          type: string
+          description: Description de la personnalité
+        country:
+          type: string
+          description: Code pays (FR, US, EG, RU, etc.)
+        avatar:
+          type: string
+        stats:
+          $ref: "#/components/schemas/AgentStats"
+        level:
+          type: string
+          enum: [passif, actif, leader]
+        status_text:
+          type: string
+        is_neutralized:
+          type: boolean
+        turn:
+          type: integer
+
+    AgentStats:
+      type: object
+      properties:
+        croyance:
+          type: number
+          description: Niveau de croyance (0-100)
+        confiance:
+          type: number
+          description: Niveau de confiance (0-100)
+        richesse:
+          type: number
+          description: Niveau de richesse (0-100)
+
+    SSEEvent:
+      type: object
+      description: |
+        Événement SSE streamé. Le champ `type` détermine la structure de `data`.
+        Types possibles: phase, llm_call, tool_call, tool_result, llm_text,
+        vision_update, proposal, choice_resolved, reactions, indices_update,
+        strategy, turn_update, end, agent_nats, agent_death, agent_clone,
+        heartbeat, error, result, images, game_over_reveal
+      properties:
+        type:
+          type: string
+          description: Type d'événement
+        data:
+          type: object
+          description: Données de l'événement (structure variable selon type)
+
+    NewsProposal:
+      type: object
+      description: Proposition de 3 news par le Game Master
+      properties:
+        real:
+          $ref: "#/components/schemas/NewsItem"
+        fake:
+          $ref: "#/components/schemas/NewsItem"
+        satirical:
+          $ref: "#/components/schemas/NewsItem"
+        gm_commentary:
+          type: string
+          description: Commentaire du Game Master (style Gorafi)
+        gm_secret:
+          type: object
+          description: Stratégie cachée du GM (quel choix il veut que le joueur fasse)
+          properties:
+            desired_pick:
+              type: string
+              enum: [real, fake, satirical]
+            manipulation_tactic:
+              type: string
+            next_turn_plan:
+              type: string
+
+    NewsItem:
+      type: object
+      properties:
+        text:
+          type: string
+          description: Titre de la news
+        body:
+          type: string
+          description: Corps de l'article
+        stat_impact:
+          type: object
+          description: Impact sur les indices (ex. {rage: 5, credibilite: -3})
+          additionalProperties:
+            type: number

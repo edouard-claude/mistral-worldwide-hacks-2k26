@@ -1,0 +1,17 @@
+services:
+  backend:
+    build: .
+    container_name: bmadlife-backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8001:8001"
+    volumes:
+      - ./sessions:/app/sessions
+    environment:
+      - SESSIONS_DIR=/app/sessions
+    networks:
+      - bmadlife_bmadlife
+
+networks:
+  bmadlife_bmadlife:
+    external: true

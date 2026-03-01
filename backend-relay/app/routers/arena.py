@@ -34,7 +34,8 @@ async def init_session(body: InitSessionInput, request: Request) -> JSONResponse
             content={"error": "NATS is not connected"},
         )
 
-    await nats_relay.publish_init(body.session_id)
+    query_params = dict(request.query_params)
+    await nats_relay.publish_init(body.session_id, query_params)
 
     return JSONResponse(
         status_code=200,
@@ -59,7 +60,8 @@ async def submit_news(body: SubmitNewsInput, request: Request) -> JSONResponse:
             content={"error": "NATS is not connected"},
         )
 
-    await nats_relay.publish_fakenews(body.session_id, body.content)
+    query_params = dict(request.query_params)
+    await nats_relay.publish_fakenews(body.session_id, body.content, query_params)
 
     return JSONResponse(
         status_code=200,

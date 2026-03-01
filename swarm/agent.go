@@ -8,9 +8,9 @@ import (
 
 // AgentNames are the predefined names for agents
 var AgentNames = []string{
-	"Marcus", "Elena", "Victor", "Luna",
-	"Dante", "Aria", "Felix", "Nova",
-	"Oscar", "Zara", "Leon", "Maya",
+	"Grigori", "Natasha", "Pavel", "Zoya",
+	"Dmitri", "Aria", "Alexei", "Vera",
+	"Sergei", "Nadia", "Nikolai", "Olga",
 }
 
 // generateUUID generates a random UUID v4
@@ -113,7 +113,7 @@ func KillAgent(agent *Agent, session *Session, round int, score *AgentScore, las
 	if score != nil {
 		scoreVal = score.TotalPoints
 	}
-	if err := WriteDeath(agent, round, scoreVal, lastConfidence, lastMessage, rankings); err != nil {
+	if err := WriteDeath(agent, round, scoreVal, lastConfidence, lastMessage, rankings, session.Lang); err != nil {
 		return fmt.Errorf("failed to write DEATH.md: %w", err)
 	}
 

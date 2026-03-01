@@ -1,0 +1,446 @@
+@import url('https://fonts.googleapis.com/css2?family=Bangers&family=JetBrains+Mono:wght@400;700&family=Oswald:wght@500;700&family=Playfair+Display:wght@700;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --red-soviet: 0 100% 40%;
+    --red-dark: 0 100% 27%;
+    --ocre-gulag: 30 41% 68%;
+    --ocre-dark: 40 85% 29%;
+    --black: 0 0% 4%;
+    --white-paper: 42 50% 92%;
+    --matrix-green: 133 100% 50%;
+    --comic-yellow: 48 100% 62%;
+    --comic-blue: 210 80% 50%;
+
+    /* Agent distinct colors */
+    --agent-01: 210 60% 55%;     /* Steel blue — Jean-Michel Vérity */
+    --agent-02: 30 85% 55%;      /* Amber — Karen Q-Anon */
+    --agent-03: 155 55% 45%;     /* Emerald — Aisha Al-Rashid */
+    --agent-04: 270 50% 60%;     /* Violet — Boris Troll */
+
+    --background: 0 0% 4%;
+    --foreground: 42 50% 92%;
+
+    --card: 42 50% 92%;
+    --card-foreground: 0 0% 4%;
+
+    --popover: 42 50% 92%;
+    --popover-foreground: 0 0% 4%;
+
+    --primary: 0 100% 40%;
+    --primary-foreground: 42 50% 92%;
+
+    --secondary: 30 41% 68%;
+    --secondary-foreground: 0 0% 4%;
+
+    --muted: 0 0% 15%;
+    --muted-foreground: 30 20% 50%;
+
+    --accent: 40 85% 29%;
+    --accent-foreground: 42 50% 92%;
+
+    --destructive: 0 100% 40%;
+    --destructive-foreground: 42 50% 92%;
+
+    --border: 0 0% 4%;
+    --input: 0 0% 4%;
+    --ring: 0 100% 40%;
+
+    --radius: 0px;
+
+    --sidebar-background: 0 0% 4%;
+    --sidebar-foreground: 42 50% 92%;
+    --sidebar-primary: 0 100% 40%;
+    --sidebar-primary-foreground: 42 50% 92%;
+    --sidebar-accent: 40 85% 29%;
+    --sidebar-accent-foreground: 42 50% 92%;
+    --sidebar-border: 0 0% 4%;
+    --sidebar-ring: 0 100% 40%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'JetBrains Mono', monospace;
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Oswald', sans-serif;
+    text-transform: uppercase;
+    margin: 0;
+  }
+}
+
+@layer utilities {
+  /* Panel: paper/parchment style — comic edition */
+  .panel-paper {
+    background-color: hsl(var(--white-paper));
+    color: hsl(var(--black));
+    border: 5px solid hsl(var(--black));
+    box-shadow: 
+      8px 8px 0px hsl(var(--black)),
+      inset 0 0 60px hsl(var(--ocre-dark) / 0.15);
+    position: relative;
+  }
+
+  .panel-paper::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: url("data:image/svg+xml,%3Csvg width='6' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='6' height='6' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .panel-paper > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .panel-header-dark {
+    background-color: hsl(var(--black));
+    color: hsl(var(--white-paper));
+    padding: 10px 14px;
+    text-align: center;
+    border-bottom: 5px solid hsl(var(--red-soviet));
+    position: relative;
+  }
+
+  /* Feed panel: dark terminal style */
+  .panel-feed {
+    background-color: hsl(var(--black));
+    color: hsl(var(--matrix-green));
+    border: 5px solid hsl(var(--ocre-gulag));
+    box-shadow: 8px 8px 0px hsl(var(--black) / 0.5);
+  }
+
+  .panel-feed-header {
+    background-color: hsl(var(--red-dark));
+    color: hsl(var(--white-paper));
+    padding: 10px;
+    text-align: center;
+  }
+
+  /* Buttons — comic press effect */
+  .btn-soviet {
+    background-color: hsl(var(--red-soviet));
+    color: white;
+    border: 4px solid hsl(var(--black));
+    font-family: 'Oswald', sans-serif;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 5px 5px 0px hsl(var(--black));
+    transition: all 0.1s;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-soviet::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(45deg, transparent 40%, hsl(0 0% 100% / 0.15) 50%, transparent 60%);
+    transition: transform 0.3s;
+    transform: translateX(-100%);
+  }
+
+  .btn-soviet:hover::after {
+    transform: translateX(100%);
+  }
+
+  .btn-soviet:active {
+    box-shadow: 0px 0px 0px hsl(var(--black));
+    transform: translate(5px, 5px);
+  }
+
+  .btn-select-news {
+    background-color: hsl(var(--black));
+    color: hsl(var(--white-paper));
+    border: 3px solid hsl(var(--black));
+    font-family: 'Oswald', sans-serif;
+    cursor: pointer;
+    transition: all 0.15s;
+    box-shadow: 3px 3px 0px hsl(var(--red-soviet));
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .btn-select-news:hover {
+    background-color: hsl(var(--red-soviet));
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0px hsl(var(--black));
+  }
+
+  .btn-select-news:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0px 0px 0px hsl(var(--black));
+  }
+
+  /* Agent card — comic style */
+  .agent-card-ocre {
+    background-color: hsl(var(--ocre-gulag));
+    border: 4px solid hsl(var(--black));
+    color: hsl(var(--black));
+    box-shadow: 4px 4px 0px hsl(var(--black) / 0.4);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+
+  .agent-card-ocre:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0px hsl(var(--black) / 0.5);
+  }
+
+  /* Diagonal stripe background */
+  .bg-stripes {
+    background: repeating-linear-gradient(
+      45deg,
+      hsl(var(--black)),
+      hsl(var(--black)) 10px,
+      hsl(0 0% 7%) 10px,
+      hsl(0 0% 7%) 20px
+    );
+  }
+
+  /* Comic speech bubble */
+  .speech-bubble {
+    position: relative;
+    background: hsl(var(--comic-yellow));
+    border: 3px solid hsl(var(--black));
+    padding: 4px 8px;
+    font-family: 'Bangers', cursive;
+    color: hsl(var(--black));
+  }
+
+  .speech-bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 12px;
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 8px solid hsl(var(--black));
+  }
+
+  /* Headline font for comic/satirical feel */
+  .font-comic {
+    font-family: 'Bangers', cursive;
+    letter-spacing: 0.04em;
+  }
+
+  .font-editorial {
+    font-family: 'Playfair Display', serif;
+  }
+
+  /* Flash effect for breaking news */
+  .flash-red {
+    animation: flash-red 0.6s ease-out;
+  }
+
+  /* Stamp effect */
+  .stamp {
+    border: 4px solid hsl(var(--red-soviet));
+    color: hsl(var(--red-soviet));
+    transform: rotate(-8deg);
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    opacity: 0.85;
+  }
+}
+
+/* Animations */
+@keyframes ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-ticker {
+  animation: ticker-scroll 60s linear infinite;
+}
+
+@keyframes typewriter-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes action-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(100px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes flash-red {
+  0% { background-color: hsl(0 100% 50% / 0.4); }
+  100% { background-color: transparent; }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10% { transform: translateX(-6px) rotate(-2deg); }
+  20% { transform: translateX(6px) rotate(2deg); }
+  30% { transform: translateX(-5px) rotate(-1.5deg); }
+  40% { transform: translateX(5px) rotate(1.5deg); }
+  50% { transform: translateX(-3px) rotate(-1deg); }
+  60% { transform: translateX(3px) rotate(1deg); }
+  70% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+  90% { transform: translateX(-1px); }
+}
+
+@keyframes stamp-appear {
+  0% { transform: rotate(-8deg) scale(3); opacity: 0; }
+  60% { transform: rotate(-8deg) scale(0.95); opacity: 1; }
+  100% { transform: rotate(-8deg) scale(1); opacity: 0.85; }
+}
+
+@keyframes star-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 5px hsl(var(--red-soviet) / 0.3); }
+  50% { box-shadow: 0 0 20px hsl(var(--red-soviet) / 0.6); }
+}
+
+@keyframes news-enter {
+  0% { opacity: 0; transform: translateX(40px) rotate(2deg); }
+  100% { opacity: 1; transform: translateX(0) rotate(0); }
+}
+
+/* Dramatic debate animations */
+@keyframes slam-in {
+  0% { transform: scale(0.3) rotate(-5deg); opacity: 0; }
+  50% { transform: scale(1.1) rotate(1deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+
+@keyframes death-flash {
+  0% { background-color: hsl(0 100% 50% / 0.6); transform: scale(1); }
+  25% { background-color: hsl(0 100% 30% / 0.8); transform: scale(1.03); }
+  50% { background-color: hsl(0 100% 50% / 0.4); transform: scale(0.98); }
+  75% { background-color: hsl(0 100% 20% / 0.3); transform: scale(1.01); }
+  100% { background-color: transparent; transform: scale(1); }
+}
+
+@keyframes skull-drop {
+  0% { transform: translateY(-30px) rotate(-20deg) scale(2); opacity: 0; }
+  60% { transform: translateY(3px) rotate(5deg) scale(1); opacity: 1; }
+  80% { transform: translateY(-2px) rotate(-2deg); }
+  100% { transform: translateY(0) rotate(0); opacity: 1; }
+}
+
+@keyframes attack-slash {
+  0% { clip-path: inset(0 100% 0 0); }
+  100% { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes victory-glow {
+  0% { box-shadow: 0 0 0px hsl(48 100% 50% / 0); }
+  50% { box-shadow: 0 0 40px hsl(48 100% 50% / 0.8), 0 0 80px hsl(48 100% 50% / 0.3); }
+  100% { box-shadow: 0 0 15px hsl(48 100% 50% / 0.4); }
+}
+
+@keyframes clone-spawn {
+  0% { transform: scaleY(0) scaleX(0.5); opacity: 0; filter: hue-rotate(90deg) brightness(2); }
+  40% { transform: scaleY(1.2) scaleX(0.9); opacity: 0.7; filter: hue-rotate(45deg) brightness(1.5); }
+  70% { transform: scaleY(0.95) scaleX(1.05); opacity: 0.9; filter: hue-rotate(10deg); }
+  100% { transform: scaleY(1) scaleX(1); opacity: 1; filter: hue-rotate(0deg) brightness(1); }
+}
+
+@keyframes debate-line-attack {
+  0% { transform: translateX(-20px) skewX(-3deg); opacity: 0; }
+  40% { transform: translateX(4px) skewX(1deg); opacity: 1; }
+  100% { transform: translateX(0) skewX(0); }
+}
+
+@keyframes debate-line-defense {
+  0% { transform: scale(0.9); opacity: 0; border-left-width: 0px; }
+  100% { transform: scale(1); opacity: 1; border-left-width: 4px; }
+}
+
+@keyframes screen-shake {
+  0%, 100% { transform: translate(0); }
+  10% { transform: translate(-3px, -2px); }
+  20% { transform: translate(3px, 2px); }
+  30% { transform: translate(-2px, 1px); }
+  40% { transform: translate(2px, -1px); }
+  50% { transform: translate(-1px, 2px); }
+  60% { transform: translate(1px, -1px); }
+}
+
+.animate-screen-shake {
+  animation: screen-shake 0.5s ease-out;
+}
+
+@keyframes turn-transition {
+  0% { opacity: 0; }
+  15% { opacity: 1; }
+  75% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.animate-death-flash {
+  animation: death-flash 0.8s ease-out;
+}
+
+.animate-skull-drop {
+  animation: skull-drop 0.6s ease-out both;
+}
+
+.animate-victory-glow {
+  animation: victory-glow 1s ease-out both;
+}
+
+.animate-clone-spawn {
+  animation: clone-spawn 0.7s ease-out both;
+}
+
+.animate-slam-in {
+  animation: slam-in 0.4s ease-out both;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(var(--black));
+  border-left: 2px solid hsl(var(--ocre-dark));
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--ocre-dark));
+  border: 1px solid hsl(var(--black));
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--ocre-gulag));
+}

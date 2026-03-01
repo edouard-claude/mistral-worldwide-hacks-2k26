@@ -17,12 +17,13 @@ type Agent struct {
 
 // Session represents a game session
 type Session struct {
-	ID        string   `json:"id"`
-	FakeNews  string   `json:"fake_news"`
+	ID        string    `json:"id"`
+	FakeNews  string    `json:"fake_news"`
 	Agents    [4]*Agent `json:"agents"`    // always 4 active agents
-	Round     int      `json:"round"`      // current round (1-5)
-	Graveyard []*Agent `json:"graveyard"`  // dead agents
-	Dir       string   `json:"-"`          // session path
+	Round     int       `json:"round"`     // current round (1-10)
+	Graveyard []*Agent  `json:"graveyard"` // dead agents
+	Lang      string    `json:"lang"`      // language code (fr, en, de, etc.)
+	Dir       string    `json:"-"`         // session path
 }
 
 // AgentMessage is exchanged between orchestrator and agents via NATS
@@ -95,13 +96,14 @@ type EndEventPayload struct {
 
 // GlobalState is the omniscient state snapshot
 type GlobalState struct {
-	SessionID string          `json:"session_id"`
-	FakeNews  string          `json:"fake_news"`
-	Round     int             `json:"round"`
-	Phase     int             `json:"phase"`
-	Agents    []*Agent        `json:"agents"`
-	Graveyard []*Agent        `json:"graveyard"`
-	Scores    map[string]int  `json:"scores,omitempty"`
+	SessionID string         `json:"session_id"`
+	FakeNews  string         `json:"fake_news"`
+	Round     int            `json:"round"`
+	Phase     int            `json:"phase"`
+	Lang      string         `json:"lang"`
+	Agents    []*Agent       `json:"agents"`
+	Graveyard []*Agent       `json:"graveyard"`
+	Scores    map[string]int `json:"scores,omitempty"`
 }
 
 // Phase1Response is the expected JSON from Mistral in phase 1
@@ -134,4 +136,5 @@ type AgentScore struct {
 // InitPayload is the payload for session initialization via arena.init
 type InitPayload struct {
 	SessionID string `json:"session_id"`
+	Lang      string `json:"lang,omitempty"` // language code (fr, en, de, etc.), defaults to "fr"
 }

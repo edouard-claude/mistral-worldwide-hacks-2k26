@@ -16,15 +16,15 @@ It is an **autonomous agent** with persistent memory, per-agent vision files, an
 
 ```
 ┌────────────┐     SSE      ┌──────────────┐    HTTP+WS    ┌──────────────┐
-│  Lovable   │ ◄──────────► │  Mistralski  │ ◄───────────► │  wh26 relay  │
-│ (frontend) │              │  play_web.py │               │  (Go backend)│
+│  Frontend  │ ◄──────────► │  Mistralski  │ ◄───────────► │  wh26 relay  │
+│  (React)   │              │  play_web.py │               │  (Go backend)│
 └────────────┘              └──────┬───────┘               └──────┬───────┘
                                    │                              │
                           Mistral Large API               Swarm arena agents
                           (function calling)              (Mistral Small 3.2)
 ```
 
-## Endpoints (for Lovable)
+## API Endpoints
 
 Base URL: `http://<host>:8899`
 
@@ -172,7 +172,7 @@ echo "MISTRAL_API_KEY=your_key" > .env
 # Run
 python3 scripts/play_web.py
 # → http://localhost:8899 (built-in debug UI)
-# → Expose with ngrok for Lovable: ngrok http 8899
+# → Expose with ngrok: ngrok http 8899
 ```
 
 ## Project Structure

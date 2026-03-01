@@ -13,6 +13,6 @@ COPY config/ ./config/
 
 RUN mkdir -p data
 
-EXPOSE 8899
+EXPOSE 80
 
 CMD ["python", "scripts/play_web.py"]

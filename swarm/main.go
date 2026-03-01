@@ -98,8 +98,14 @@ func main() {
 
 		fmt.Printf("\n🚀 Init reçu pour session: %s\n", payload.SessionID)
 
+		// Default language is French
+		lang := payload.Lang
+		if lang == "" {
+			lang = "fr"
+		}
+
 		// Launch game in goroutine
-		go runGame(payload.SessionID, nc, mistral, absBaseDir, *timeout)
+		go runGame(payload.SessionID, lang, nc, mistral, absBaseDir, *timeout)
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error subscribing to arena.init: %v\n", err)
@@ -111,7 +117,7 @@ func main() {
 }
 
 // runGame runs a complete game session
-func runGame(sessionID string, rawNC *nats.Conn, mistral *MistralClient, baseDir string, timeout time.Duration) {
+func runGame(sessionID string, lang string, rawNC *nats.Conn, mistral *MistralClient, baseDir string, timeout time.Duration) {
 	// F1: Ensure session is removed from active map when done
 	defer func() {
 		activeSessionsMu.Lock()
@@ -120,7 +126,7 @@ func runGame(sessionID string, rawNC *nats.Conn, mistral *MistralClient, baseDir
 	}()
 
 	// Get or create session
-	session, resumed, err := GetOrCreateSession(sessionID, baseDir)
+	session, resumed, err := GetOrCreateSession(sessionID, baseDir, lang)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[%s] Error creating/loading session: %v\n", sessionID, err)
 		return
@@ -168,8 +174,8 @@ func runGame(sessionID string, rawNC *nats.Conn, mistral *MistralClient, baseDir
 		startRound = session.Round + 1
 	}
 
-	// Game loop: from startRound to 5
-	for round := startRound; round <= 5; round++ {
+	// Game loop: from startRound to 10
+	for round := startRound; round <= 10; round++ {
 		session.Round = round
 		fmt.Printf("\n[%s] ========== TOUR %d ==========\n", sessionID, round)
 
@@ -272,7 +278,7 @@ func runGame(sessionID string, rawNC *nats.Conn, mistral *MistralClient, baseDir
 
 		// Natural selection (except last round) - determine BEFORE writing memories
 		var loserName, winnerName, cloneName string
-		if round < 5 {
+		if round < 10 {
 			loser := FindLoser(scores, session.Agents)
 			winner := FindWinner(scores, session.Agents)
 
@@ -351,6 +357,7 @@ func runGame(sessionID string, rawNC *nats.Conn, mistral *MistralClient, baseDir
 				responses4[agent.ID],
 				scores, session.Agents,
 				loserName, cloneName, winnerName,
+				session.Lang,
 			)
 			_ = WriteMemory(agent, round, memory)
 		}

@@ -82,7 +82,7 @@ func main() {
 	fmt.Printf("\n📡 Topic fake news: %s\n", fakeNewsTopic)
 	fmt.Println("\n--- Mode interactif ---")
 	fmt.Println("Entrez une fake news par ligne (ou 'quit' pour quitter)")
-	fmt.Println("Le service attend une fake news à chaque tour (5 tours max)")
+	fmt.Println("Le service attend une fake news à chaque tour (10 tours max)")
 	fmt.Println()
 
 	// Interactive mode: read fake news from stdin

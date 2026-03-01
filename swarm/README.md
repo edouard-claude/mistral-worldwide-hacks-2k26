@@ -79,7 +79,7 @@ Watch AI agents argue, vote, die, and clone in real-time.
 ## Game Flow
 
 ```
-Round N (5 rounds total)
+Round N (10 rounds total)
 │
 ├─► Phase 1: COGITATION          ← each agent analyzes fake news privately
 │       └─► 4 goroutines → Mistral API (parallel)
@@ -98,7 +98,7 @@ Round N (5 rounds total)
         └─► Highest score → CLONE (new agent with mutated personality)
 ```
 
-**Result**: After 5 rounds, only the most persuasive ideological lineage survives.
+**Result**: After 10 rounds, only the most persuasive ideological lineage survives.
 
 ---
 

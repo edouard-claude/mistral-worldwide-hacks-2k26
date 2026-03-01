@@ -1,0 +1,7 @@
+examples/
+.claude/
+.git/
+.DS_Store
+node_modules/
+Makefile
+docker-compose*.yml

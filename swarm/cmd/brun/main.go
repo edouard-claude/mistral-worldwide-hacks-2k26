@@ -154,7 +154,7 @@ func generateUUID() string {
 
 func main() {
 	natsURL := flag.String("nats-url", "nats://demo.nats.io:4222", "NATS server URL")
-	sessions := flag.Int("sessions", 5, "Number of sessions to run in parallel")
+	sessions := flag.Int("sessions", 15, "Number of sessions to run in parallel")
 	flag.Parse()
 
 	// Shuffle titles

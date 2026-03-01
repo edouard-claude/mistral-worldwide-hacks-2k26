@@ -1,0 +1,203 @@
+// Centralized i18n dictionary for Game of Claw
+
+export type Lang = "fr" | "en";
+
+const t = {
+  // ── TopBar ──
+  "topbar.department": { fr: "DÉPARTEMENT DE LA VÉRITÉ ALTERNATIVE", en: "DEPARTMENT OF ALTERNATIVE TRUTH" },
+  "topbar.turn": { fr: "TOUR", en: "TURN" },
+  "topbar.decerebration": { fr: "INDICE MONDIAL DE DÉCÉRÉBRATION", en: "GLOBAL DECEREBRATION INDEX" },
+  "topbar.btn.launchDebate": { fr: "LANCER LE DÉBAT →", en: "LAUNCH DEBATE →" },
+  "topbar.btn.debating": { fr: "DÉBAT EN COURS...", en: "DEBATE IN PROGRESS..." },
+  "topbar.btn.resolving": { fr: "RÉSOLUTION...", en: "RESOLVING..." },
+  "topbar.btn.nextTurn": { fr: "TOUR SUIVANT →", en: "NEXT TURN →" },
+  "topbar.btn.gameOver": { fr: "☠ GAME OVER", en: "☠ GAME OVER" },
+
+  // ── PropagandaPanel ──
+  "propa.title": { fr: "MISTRALSKI", en: "MISTRALSKI" },
+  "propa.subtitle": { fr: "SÉLECTION DES NOUVELLES", en: "NEWS SELECTION" },
+  "propa.strategicAnalysis": { fr: "Analyse stratégique", en: "Strategic analysis" },
+  "propa.clickStrategy": { fr: "Cliquer pour stratégie", en: "Click for strategy" },
+  "propa.chaos": { fr: "CHAOS", en: "CHAOS" },
+  "propa.credulity": { fr: "CRÉDULITÉ", en: "CREDULITY" },
+  "propa.news": { fr: "📰 NOUVELLES", en: "📰 NEWS" },
+  "propa.selected": { fr: "✓ SÉLECTIONNÉ", en: "✓ SELECTED" },
+  "propa.select": { fr: "★ Sélectionner", en: "★ Select" },
+  "propa.generating": { fr: "GÉNÉRATION...", en: "GENERATING..." },
+  "propa.inProgress": { fr: "EN COURS", en: "IN PROGRESS" },
+
+  // ── CenterPanel ──
+  "center.selectedArticle": { fr: "ARTICLE SÉLECTIONNÉ", en: "SELECTED ARTICLE" },
+  "center.specialEdition": { fr: "GAME OF CLAW — ÉDITION SPÉCIALE", en: "GAME OF CLAW — SPECIAL EDITION" },
+  "center.exclusive": { fr: "EXCLUSIF", en: "EXCLUSIVE" },
+  "center.newsSource": { fr: "GAME OF CLAW NEWS", en: "GAME OF CLAW NEWS" },
+  "center.verified": { fr: "☭ ARTICLE VÉRIFIÉ™", en: "☭ VERIFIED ARTICLE™" },
+  "center.disclaimer": {
+    fr: "Cet article est une production du Département de la Vérité Alternative. Toute ressemblance avec la réalité est purement accidentelle et regrettable.",
+    en: "This article is produced by the Department of Alternative Truth. Any resemblance to reality is purely accidental and regrettable.",
+  },
+  "center.noNewsSelected": { fr: "AUCUNE NEWS SÉLECTIONNÉE", en: "NO NEWS SELECTED" },
+  "center.noNewsSub": {
+    fr: "Sélectionnez un article de propagande dans le panneau de gauche pour que les agents autonomes puissent débattre de son impact.",
+    en: "Select a propaganda article from the left panel so autonomous agents can debate its impact.",
+  },
+  "center.agentDebate": { fr: "💬 DÉBAT DES AGENTS", en: "💬 AGENT DEBATE" },
+  "center.gmReflection": { fr: "RÉFLEXION DU GRAND DICTATEUR SUPRÊME MISTRALSKI", en: "SUPREME DICTATOR MISTRALSKI'S REFLECTION" },
+  "center.selectANews": { fr: "Sélectionnez une news", en: "Select a news" },
+  "center.gmThinking": { fr: "GM EN RÉFLEXION", en: "GM THINKING" },
+  "center.debateOngoing": { fr: "DÉBAT EN COURS", en: "DEBATE ONGOING" },
+  "center.resolution": { fr: "RÉSOLUTION", en: "RESOLUTION" },
+  "center.results": { fr: "RÉSULTATS", en: "RESULTS" },
+  "center.selectNewsPrompt": { fr: "▸ SÉLECTIONNEZ UNE NEWS", en: "▸ SELECT A NEWS" },
+  "center.gmAnalyzing": { fr: "Mistralski analyse la situation...", en: "Mistralski is analyzing the situation..." },
+  "center.agentPreparing": { fr: "un agent prépare sa réponse...", en: "an agent is preparing their response..." },
+  "center.turnResult": { fr: "★ RÉSULTAT DU TOUR", en: "★ TURN RESULT" },
+  "center.dominates": { fr: "DOMINE", en: "DOMINATES" },
+  "center.eliminated": { fr: "ÉLIMINÉ", en: "ELIMINATED" },
+
+  // ── SwarmPanel ──
+  "swarm.title": { fr: "AGENTS AUTONOMES", en: "AUTONOMOUS AGENTS" },
+  "swarm.subtitle": { fr: "★ SURVIVRE À TOUT PRIX ★", en: "★ SURVIVE AT ALL COSTS ★" },
+  "swarm.chessboard": { fr: "★ ÉCHIQUIER ★", en: "★ CHESSBOARD ★" },
+  "swarm.farLeft": { fr: "EXTRÊME GAUCHE", en: "FAR LEFT" },
+  "swarm.left": { fr: "GAUCHE", en: "LEFT" },
+  "swarm.right": { fr: "DROITE", en: "RIGHT" },
+  "swarm.farRight": { fr: "EXTRÊME DROITE", en: "FAR RIGHT" },
+  "swarm.speaking": { fr: "◀ PARLE", en: "◀ SPEAKING" },
+  "swarm.eliminatedLabel": { fr: "☠ ÉLIMINÉ", en: "☠ ELIMINATED" },
+  "swarm.danger": { fr: "☠ DANGER", en: "☠ DANGER" },
+  "swarm.clickDetails": { fr: "Cliquer pour détails →", en: "Click for details →" },
+  "swarm.life": { fr: "VIE", en: "HP" },
+  "swarm.conviction": { fr: "CONV", en: "CONV" },
+  "swarm.selfishness": { fr: "ÉGOÏ", en: "SELF" },
+  "swarm.hallOfHeroes": { fr: "HALL DES HÉROS", en: "HALL OF HEROES" },
+
+  // ── GmTerminal ──
+  "terminal.waiting": { fr: "EN ATTENTE...", en: "WAITING..." },
+  "terminal.journal": { fr: "JOURNAL DE BORD DU GM", en: "GM LOG JOURNAL" },
+  "terminal.thinking": { fr: "le général réfléchit...", en: "the general is thinking..." },
+  "terminal.imagesReceived": { fr: "🎨 Images reçues", en: "🎨 Images received" },
+  "terminal.imagesFallback": { fr: "🎨 Images indisponibles — fallback local", en: "🎨 Images unavailable — local fallback" },
+  "terminal.phase": { fr: "PHASE", en: "PHASE" },
+  "terminal.llm": { fr: "LLM", en: "LLM" },
+  "terminal.tool": { fr: "OUTIL", en: "TOOL" },
+  "terminal.result": { fr: "RÉSULTAT", en: "RESULT" },
+  "terminal.info": { fr: "INFO", en: "INFO" },
+  "terminal.vision": { fr: "👁 VISION", en: "👁 VISION" },
+  "terminal.strategy": { fr: "🎯 STRATÉGIE", en: "🎯 STRATEGY" },
+  "terminal.mistralski": { fr: "MISTRALSKI", en: "MISTRALSKI" },
+
+  // ── GameOverScreen ──
+  "gameover.chaosAbsolute": { fr: "CHAOS ABSOLU", en: "ABSOLUTE CHAOS" },
+  "gameover.chaosAbsoluteSub": { fr: "Le monde est en ruines. Bravo, camarade.", en: "The world is in ruins. Well done, comrade." },
+  "gameover.totalPropaganda": { fr: "PROPAGANDE TOTALE", en: "TOTAL PROPAGANDA" },
+  "gameover.totalPropagandaSub": { fr: "La vérité n'existe plus. Mission accomplie.", en: "Truth no longer exists. Mission accomplished." },
+  "gameover.majorInstability": { fr: "INSTABILITÉ MAJEURE", en: "MAJOR INSTABILITY" },
+  "gameover.majorInstabilitySub": { fr: "Le doute règne. Pas mal pour un amateur.", en: "Doubt reigns. Not bad for an amateur." },
+  "gameover.partialFailure": { fr: "ÉCHEC PARTIEL", en: "PARTIAL FAILURE" },
+  "gameover.partialFailureSub": { fr: "Le peuple résiste encore. Décevant.", en: "The people still resist. Disappointing." },
+  "gameover.finalReport": { fr: "RAPPORT FINAL", en: "FINAL REPORT" },
+  "gameover.chaos": { fr: "CHAOS", en: "CHAOS" },
+  "gameover.credulity": { fr: "CRÉDULITÉ", en: "CREDULITY" },
+  "gameover.disinfoIndex": { fr: "INDICE MONDIAL DE DÉSINFORMATION", en: "GLOBAL DISINFORMATION INDEX" },
+  "gameover.dominantAgent": { fr: "AGENT DOMINANT", en: "DOMINANT AGENT" },
+  "gameover.conviction": { fr: "Conviction", en: "Conviction" },
+  "gameover.life": { fr: "Vie", en: "Life" },
+  "gameover.survivors": { fr: "survivant", en: "survivor" },
+  "gameover.agent": { fr: "agent", en: "agent" },
+  "gameover.replay": { fr: "★ REJOUER ★", en: "★ PLAY AGAIN ★" },
+
+  // ── AgentDetailModal ──
+  "agent.biography": { fr: "BIOGRAPHIE", en: "BIOGRAPHY" },
+  "agent.trait": { fr: "TRAIT", en: "TRAIT" },
+  "agent.weakness": { fr: "FAIBLESSE", en: "WEAKNESS" },
+  "agent.stats": { fr: "STATISTIQUES", en: "STATISTICS" },
+  "agent.life": { fr: "VIE", en: "HEALTH" },
+  "agent.energy": { fr: "ÉNERGIE", en: "ENERGY" },
+  "agent.conviction": { fr: "CONVICTION", en: "CONVICTION" },
+  "agent.selfishness": { fr: "ÉGOÏSME", en: "SELFISHNESS" },
+  "agent.dangerLevel": { fr: "NIVEAU DE DANGER", en: "DANGER LEVEL" },
+  "agent.critical": { fr: "CRITIQUE", en: "CRITICAL" },
+  "agent.high": { fr: "ÉLEVÉ", en: "HIGH" },
+  "agent.moderate": { fr: "MODÉRÉ", en: "MODERATE" },
+  "agent.low": { fr: "FAIBLE", en: "LOW" },
+
+  // ── HallOfHeroes ──
+  "hall.memorial": { fr: "MÉMORIAL", en: "MEMORIAL" },
+  "hall.title": { fr: "HALL DES HÉROS TOMBÉS", en: "HALL OF FALLEN HEROES" },
+  "hall.subtitle": { fr: "ILS ONT SERVI... PUIS ILS SONT MORTS", en: "THEY SERVED... THEN THEY DIED" },
+  "hall.nobodyDead": { fr: "Personne n'est encore mort. Patience, camarade... ça ne saurait tarder.", en: "Nobody has died yet. Patience, comrade... it won't be long." },
+  "hall.eliminatedAt": { fr: "au tour", en: "at turn" },
+  "hall.eliminatedLabel": { fr: "ÉLIMINÉ", en: "ELIMINATED" },
+  "hall.executedBy": { fr: "Exécuté par", en: "Executed by" },
+  "hall.during": { fr: "Pendant", en: "During" },
+  "hall.close": { fr: "FERMER LE MÉMORIAL", en: "CLOSE MEMORIAL" },
+  "hall.comment1": { fr: "Un seul mort pour l'instant. Le jeu ne fait que commencer, camarade.", en: "Only one dead so far. The game is just beginning, comrade." },
+  "hall.commentFew": { fr: "agents tombés. Le tri naturel fait son oeuvre. Seuls les plus manipulateurs survivent.", en: "agents fallen. Natural selection does its work. Only the most manipulative survive." },
+  "hall.commentMany": { fr: "victimes. C'est un véritable charnier idéologique. Magnifique.", en: "victims. It's a true ideological mass grave. Magnificent." },
+
+  // ── ChaosEventModal ──
+  "chaos.alertChaos": { fr: "ALERTE CHAOS", en: "CHAOS ALERT" },
+  "chaos.situationReport": { fr: "RAPPORT DE SITUATION", en: "SITUATION REPORT" },
+  "chaos.understood": { fr: "COMPRIS, CAMARADE", en: "UNDERSTOOD, COMRADE" },
+
+  // ── GameMasterCard ──
+  "gm.strategicAnalysis": { fr: "ANALYSE STRATÉGIQUE", en: "STRATEGIC ANALYSIS" },
+  "gm.turn": { fr: "TOUR", en: "TURN" },
+  "gm.memory": { fr: "MÉMOIRE", en: "MEMORY" },
+  "gm.lastTurn": { fr: "Dernier tour", en: "Last turn" },
+  "gm.eliminated2": { fr: "a éliminé", en: "eliminated" },
+  "gm.clone": { fr: "Clone", en: "Clone" },
+  "gm.created": { fr: "créé", en: "created" },
+  "gm.noDebate": { fr: "Aucun débat résolu pour le moment.", en: "No debate resolved yet." },
+  "gm.agentsAlive": { fr: "agents en vie sur", en: "agents alive out of" },
+  "gm.total": { fr: "total", en: "total" },
+  "gm.eliminatedCount": { fr: "éliminé(s)", en: "eliminated" },
+  "gm.avgHealth": { fr: "Santé moyenne", en: "Average health" },
+  "gm.avgConviction": { fr: "Conviction moyenne", en: "Average conviction" },
+  "gm.visionTitle": { fr: "VISION DU GM SUR LES AGENTS", en: "GM VISION ON AGENTS" },
+  "gm.intuitionTitle": { fr: "INTUITION SUR LES AGENTS", en: "INTUITION ON AGENTS" },
+  "gm.nearElim": { fr: "Au bord de l'élimination.", en: "On the verge of elimination." },
+  "gm.strongDebate": { fr: "Fort en débat.", en: "Strong in debate." },
+  "gm.exhausted": { fr: "Épuisé.", en: "Exhausted." },
+  "gm.averageProfile": { fr: "Profil moyen.", en: "Average profile." },
+  "gm.gmAnalysis": { fr: "ANALYSE DU GM", en: "GM ANALYSIS" },
+  "gm.threats": { fr: "MENACES", en: "THREATS" },
+  "gm.weakSpots": { fr: "FAILLES", en: "WEAK SPOTS" },
+  "gm.nextTurnPlan": { fr: "PLAN PROCHAIN TOUR", en: "NEXT TURN PLAN" },
+  "gm.longTermGoal": { fr: "OBJECTIF LONG TERME", en: "LONG TERM GOAL" },
+  "gm.shortTermStrategy": { fr: "STRATÉGIE COURT TERME", en: "SHORT TERM STRATEGY" },
+  "gm.longTermStrategy": { fr: "STRATÉGIE LONG TERME", en: "LONG TERM STRATEGY" },
+  "gm.waitingBackend": { fr: "En attente des données du backend...", en: "Waiting for backend data..." },
+  "gm.chaos": { fr: "CHAOS", en: "CHAOS" },
+  "gm.credulity": { fr: "CRÉDULITÉ", en: "CREDULITY" },
+  "gm.global": { fr: "MONDIAL", en: "GLOBAL" },
+
+  // ── Index page ──
+  "index.connecting": { fr: "☭ CONNEXION AU QUARTIER GÉNÉRAL...", en: "☭ CONNECTING TO HEADQUARTERS..." },
+  "index.preparingNews": { fr: "☭ MISTRALSKI PRÉPARE LES NOUVELLES...", en: "☭ MISTRALSKI IS PREPARING THE NEWS..." },
+  "index.retry": { fr: "Réessayer", en: "Retry" },
+  "index.turnTransition": { fr: "Le Politburo délibère...", en: "The Politburo is deliberating..." },
+
+  // ── Backend engine terminal lines ──
+  "engine.tour": { fr: "TOUR", en: "TURN" },
+  "engine.propose": { fr: "PROPOSE", en: "PROPOSE" },
+  "engine.resolution": { fr: "RÉSOLUTION", en: "RESOLUTION" },
+  "engine.proposalReceived": { fr: "☭ Proposition reçue", en: "☭ Proposal received" },
+  "engine.llmCall": { fr: "... appel LLM", en: "... LLM call" },
+  "engine.waitingNews": { fr: "☭ Le Politburo attend la prochaine news (tour", en: "☭ The Politburo awaits the next news (turn" },
+  "engine.errorPropose": { fr: "Erreur lors de la proposition des news", en: "Error while proposing news" },
+  "engine.errorDebate": { fr: "Erreur pendant le débat", en: "Error during debate" },
+  "engine.errorServer": { fr: "Impossible de contacter le serveur", en: "Cannot reach the server" },
+  "engine.choiceMade": { fr: "Le choix est fait.", en: "The choice is made." },
+  "engine.agentEliminated": { fr: "a été ÉLIMINÉ !", en: "has been ELIMINATED!" },
+  "engine.joinsDebate": { fr: "rejoint le débat !", en: "joins the debate!" },
+} as const;
+
+export type TranslationKey = keyof typeof t;
+
+export function tr(key: TranslationKey, lang: Lang): string {
+  return t[key]?.[lang] ?? t[key]?.["fr"] ?? key;
+}
+
+export default t;

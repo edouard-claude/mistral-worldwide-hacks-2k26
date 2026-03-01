@@ -1,11 +1,59 @@
 import json
 import logging
+import random
+from pathlib import Path
 
 from fastapi import WebSocket
 from nats.aio.client import Client as NatsClient
 from nats.aio.msg import Msg
 
 logger = logging.getLogger(__name__)
+
+_SKINS_DIR = Path(__file__).resolve().parent.parent.parent / "public" / "agent-skins"
+_AVAILABLE_SKINS = [p.stem for p in _SKINS_DIR.glob("*.png")]
+
+
+def _avatar_url(agent_name: str) -> str:
+    name = agent_name.lower()
+    if name not in _AVAILABLE_SKINS:
+        name = random.choice(_AVAILABLE_SKINS)
+    return f"/static/agent-skins/{name}.png"
+
+
+def _enrich_payload(payload: dict | list | str) -> dict | list | str:
+    """Inject avatar_url fields into payloads containing agent names."""
+    if isinstance(payload, list):
+        return [_enrich_payload(item) for item in payload]
+    if not isinstance(payload, dict):
+        return payload
+
+    # Direct agent_name field (AgentMessage, DeathEvent)
+    if "agent_name" in payload:
+        payload["avatar_url"] = _avatar_url(payload["agent_name"])
+
+    # CloneEvent: parent_name / child_name
+    for key in ("parent_name", "child_name"):
+        if key in payload:
+            payload[key.replace("name", "avatar_url")] = _avatar_url(payload[key])
+
+    # GlobalState: agents array and graveyard
+    for list_key in ("agents", "graveyard"):
+        if list_key in payload and isinstance(payload[list_key], list):
+            for agent in payload[list_key]:
+                if isinstance(agent, dict) and "name" in agent:
+                    agent["avatar_url"] = _avatar_url(agent["name"])
+
+    # EndEvent: survivors list → convert to objects with avatar
+    if "survivors" in payload and isinstance(payload["survivors"], list):
+        enriched = []
+        for name in payload["survivors"]:
+            if isinstance(name, str):
+                enriched.append({"name": name, "avatar_url": _avatar_url(name)})
+            else:
+                enriched.append(name)
+        payload["survivors"] = enriched
+
+    return payload
 
 
 class NatsRelay:
@@ -53,7 +101,8 @@ class NatsRelay:
         except (json.JSONDecodeError, UnicodeDecodeError):
             payload = msg.data.decode()
 
-        envelope = {"subject": topic_suffix, "data": payload}
+        payload = _enrich_payload(payload)
+        envelope = {"event": f"arena.{topic_suffix}", "data": payload}
 
         # Send to all connected clients for this session
         dead_clients: list[WebSocket] = []
@@ -83,19 +132,26 @@ class NatsRelay:
                 self._sessions.pop(session_id, None)
         logger.info("Client unregistered from session %s", session_id)
 
-    async def publish_init(self, session_id: str) -> None:
+    async def publish_init(self, session_id: str, query_params: dict | None = None) -> None:
         if not self._nc.is_connected:
             raise RuntimeError("NATS is not connected")
         topic = "arena.init"
-        payload = json.dumps({"session_id": session_id}).encode("utf-8")
+        payload_dict: dict = {"session_id": session_id}
+        if query_params:
+            payload_dict["query_params"] = query_params
+        payload = json.dumps(payload_dict).encode("utf-8")
         await self._nc.publish(topic, payload)
         logger.info("Published init to %s for session %s", topic, session_id)
 
-    async def publish_fakenews(self, session_id: str, content: str) -> None:
+    async def publish_fakenews(self, session_id: str, content: str, query_params: dict | None = None) -> None:
         if not self._nc.is_connected:
             raise RuntimeError("NATS is not connected")
         topic = f"arena.{session_id}.input.fakenews"
-        await self._nc.publish(topic, content.encode("utf-8"))
+        payload_dict: dict = {"content": content}
+        if query_params:
+            payload_dict["query_params"] = query_params
+        payload = json.dumps(payload_dict).encode("utf-8")
+        await self._nc.publish(topic, payload)
         logger.info("Published fakenews to %s", topic)
 
     async def disconnect(self) -> None:
