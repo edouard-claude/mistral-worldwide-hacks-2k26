@@ -264,6 +264,34 @@ a:hover { color: var(--accent-hover); }
   color: var(--green);
 }
 
+/* ─── Presence Chart ────────────────────────────────────────────────────── */
+.presence-container {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  overflow-x: auto;
+}
+
+.presence-container svg {
+  display: block;
+  margin: 0 auto;
+}
+
+.presence-container svg text {
+  font-family: var(--font);
+}
+
+.presence-legend {
+  margin-top: 1.25rem;
+  display: flex;
+  justify-content: center;
+}
+
+.presence-legend svg text {
+  font-family: var(--font);
+}
+
 /* ─── Genealogy SVG ────────────────────────────────────────────────────── */
 .genealogy-container {
   background: var(--bg-card);

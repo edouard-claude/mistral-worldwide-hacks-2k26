@@ -4,6 +4,7 @@
 import { loadSession } from '../data-loader.js';
 import { renderTimeline } from '../components/timeline.js';
 import { renderGenealogy } from '../components/genealogy-tree.js';
+import { renderPresenceChart } from '../components/presence-chart.js';
 
 export async function renderSessionOverview(app, sessionId) {
   app.innerHTML = '<div class="loading">Chargement...</div>';
@@ -24,11 +25,14 @@ export async function renderSessionOverview(app, sessionId) {
     </div>
     <h2 class="section-title">Chronologie</h2>
     <div id="timeline-container"></div>
+    <h2 class="section-title">Présence des agents</h2>
+    <div id="presence-container"></div>
     <h2 class="section-title">Arbre de lignage</h2>
     <div id="genealogy-container"></div>
   `;
 
   renderTimeline(session, document.getElementById('timeline-container'));
+  renderPresenceChart(session, document.getElementById('presence-container'));
   renderGenealogy(session, document.getElementById('genealogy-container'));
 }
 

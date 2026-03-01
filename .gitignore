@@ -4,3 +4,5 @@ _bmad*
 .env
 .fak
 swarm/fakenews-arena
+monitoring-sessions/data
+monitoring-sessions/examples
