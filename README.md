@@ -17,7 +17,10 @@ The GM is an **autonomous Mistral-powered agent** with its own memory, per-agent
 **Key features:**
 - Mistral Large function calling with 5 tools (read/write memory, agent vision files)
 - Generates 3 news per turn (real/fake/satirical) with full Gorafi-style articles
+- **Propaganda poster generation** via Mistral Agent API (Flux) — 3 images per turn
+- **Multilingual** — `?lang=fr` or `?lang=en` on all endpoints
 - Secretly manipulates the player into choosing the strategically optimal news
+- **3-level SSE visibility**: core gameplay / GM journal (inner monologue) / end-game manipulation reveal
 - Maintains persistent dossiers on each arena agent (threat level, vulnerabilities, targeted strategy)
 - SSE streaming endpoints for real-time frontend integration (Lovable)
 - Connects to the Swarm arena via the backend-relay (HTTP + WebSocket)

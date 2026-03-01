@@ -9,6 +9,7 @@ Open: http://localhost:8899
 
 import asyncio
 import json
+import os
 import random
 import shutil
 import sys
@@ -21,9 +22,9 @@ import websockets
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 import uvicorn
 
 from src.agents.game_master_agent import MEMORY_DIR, GameMasterAgent, KIND_BONUSES
@@ -40,6 +41,19 @@ arena_session_id: str = str(uuid.uuid4())
 wh26_ws: websockets.ClientConnection | None = None
 wh26_ws_queue: asyncio.Queue = asyncio.Queue()
 wh26_connected: bool = False
+
+# ── Language & Image generation state ────────────────────────────
+game_lang: str = "fr"
+MISTRAL_IMG_AGENT_ID: str | None = None
+IMAGES_DIR = Path("/tmp/gorafi_images")
+
+BRANDING_PROMPT = (
+    "Vintage Cold War Soviet propaganda poster, {subject}. "
+    "Satirical socialist realism, highly symmetrical and monumental composition. "
+    "Retro lithograph texture, bold ink outlines, flat graphic vector style. "
+    "Strictly limited color palette using only aged parchment tan, deep black, "
+    "and stark socialist red. Humorous dystopia aesthetic, distressed paper."
+)
 
 
 async def _wh26_ws_reader(ws: websockets.ClientConnection) -> None:
@@ -82,6 +96,32 @@ async def lifespan(app: FastAPI):
         print(f"[WH26] Connection failed ({e}) — running without arena")
         wh26_ws = None
         wh26_connected = False
+
+    # Create Mistral image generation agent
+    global MISTRAL_IMG_AGENT_ID
+    try:
+        api_key = os.environ.get("MISTRAL_API_KEY", "")
+        if not api_key:
+            from src.core.config import get_settings
+            api_key = get_settings().mistral_api_key.get_secret_value()
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "https://api.mistral.ai/v1/agents",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={
+                    "model": "mistral-medium-2505",
+                    "name": "propaganda-poster",
+                    "tools": [{"type": "image_generation"}],
+                },
+                timeout=15.0,
+            )
+            resp.raise_for_status()
+            MISTRAL_IMG_AGENT_ID = resp.json()["id"]
+            print(f"[IMG] Mistral image agent created: {MISTRAL_IMG_AGENT_ID}")
+    except Exception as e:
+        print(f"[IMG] Failed to create image agent ({e}) — images disabled")
+        MISTRAL_IMG_AGENT_ID = None
+
     yield
     if wh26_ws:
         await wh26_ws.close()
@@ -105,6 +145,7 @@ game_state: GameState | None = None
 current_proposal = None
 last_choice = None
 last_strategy = None
+manipulation_history: list[dict] = []
 
 AGENTS_INIT = [
     AgentState(
@@ -190,6 +231,104 @@ AGENT_STAT_PROFILES: dict[str, dict[str, dict[str, float]]] = {
 
 def _clamp(val: float, lo: float = 0.0, hi: float = 100.0) -> float:
     return max(lo, min(hi, val))
+
+
+# ── Image generation ─────────────────────────────────────────────
+
+async def generate_propaganda_image(title: str, kind: str, session_id: str) -> str | None:
+    """Generate a propaganda poster via Mistral Agent API.
+
+    Args:
+        title: News headline to illustrate.
+        kind: News kind (real/fake/satirical).
+        session_id: Game session ID for file organization.
+
+    Returns:
+        URL path like /api/images/{session_id}/{kind}.png, or None on failure.
+    """
+    if not MISTRAL_IMG_AGENT_ID:
+        return None
+
+    api_key = os.environ.get("MISTRAL_API_KEY", "")
+    if not api_key:
+        from src.core.config import get_settings
+        api_key = get_settings().mistral_api_key.get_secret_value()
+
+    prompt = BRANDING_PROMPT.format(subject=title)
+    headers = {"Authorization": f"Bearer {api_key}"}
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            # 1. Start conversation with the image agent
+            resp = await client.post(
+                "https://api.mistral.ai/v1/agents/completions",
+                headers=headers,
+                json={
+                    "agent_id": MISTRAL_IMG_AGENT_ID,
+                    "messages": [{"role": "user", "content": prompt}],
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            # 2. Extract file_id from response content
+            # The image is returned as a content block with type "image_url" or as a file reference
+            file_id = None
+            msg = data["choices"][0]["message"]
+            content = msg.get("content", "")
+
+            # Content can be a string or a list of content blocks
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict):
+                        if block.get("type") == "image_file":
+                            file_id = block.get("image_file", {}).get("file_id")
+                            break
+                        if block.get("type") == "image_url":
+                            # Direct URL — download it
+                            image_url = block.get("image_url", {}).get("url", "")
+                            if image_url:
+                                img_resp = await client.get(image_url)
+                                img_resp.raise_for_status()
+                                out_dir = IMAGES_DIR / session_id
+                                out_dir.mkdir(parents=True, exist_ok=True)
+                                out_path = out_dir / f"{kind}.png"
+                                out_path.write_bytes(img_resp.content)
+                                print(f"[IMG] {kind} saved from URL ({len(img_resp.content)} bytes)")
+                                return f"/api/images/{session_id}/{kind}.png"
+
+            if not file_id:
+                # Try to find file_id in tool results or attachments
+                tool_calls = msg.get("tool_calls", [])
+                for tc in tool_calls:
+                    if tc.get("function", {}).get("name") == "image_generation":
+                        result = tc.get("result", {})
+                        if isinstance(result, dict):
+                            file_id = result.get("file_id")
+                            break
+
+            if not file_id:
+                print(f"[IMG] No file_id found for {kind}: {json.dumps(data)[:500]}")
+                return None
+
+            # 3. Download the file
+            file_resp = await client.get(
+                f"https://api.mistral.ai/v1/files/{file_id}/content",
+                headers=headers,
+            )
+            file_resp.raise_for_status()
+
+            # 4. Save to disk
+            out_dir = IMAGES_DIR / session_id
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_path = out_dir / f"{kind}.png"
+            out_path.write_bytes(file_resp.content)
+            print(f"[IMG] {kind} saved ({len(file_resp.content)} bytes)")
+            return f"/api/images/{session_id}/{kind}.png"
+
+    except Exception as e:
+        print(f"[IMG] Generation failed for {kind}: {e}")
+        return None
 
 
 # ── SSE streaming helpers ────────────────────────────────────────
@@ -485,8 +624,10 @@ async def api_wh26():
 
 
 @app.get("/api/start")
-async def api_start():
-    global gm, game_state
+async def api_start(lang: str = Query("fr", regex="^(fr|en)$")):
+    global gm, game_state, game_lang, manipulation_history
+    game_lang = lang
+    manipulation_history = []
     if MEMORY_DIR.exists():
         shutil.rmtree(MEMORY_DIR)
     gm = GameMasterAgent()
@@ -503,6 +644,7 @@ async def api_start():
         "indices": game_state.indices.model_dump(),
         "decerebration": game_state.indice_mondial_decerebration,
         "agents": [a.model_dump() for a in game_state.agents],
+        "lang": game_lang,
     }
 
 
@@ -520,9 +662,10 @@ async def api_state():
 
 
 @app.get("/api/stream/propose")
-async def stream_propose():
+async def stream_propose(lang: str = Query("fr", regex="^(fr|en)$")):
     """SSE endpoint: run propose_news and stream GM events."""
-    global current_proposal
+    global current_proposal, game_lang
+    game_lang = lang
     queue: asyncio.Queue = asyncio.Queue()
     gs = game_state
 
@@ -535,7 +678,7 @@ async def stream_propose():
     async def run_propose():
         global current_proposal
         try:
-            current_proposal = await gm.propose_news(gs)
+            current_proposal = await gm.propose_news(gs, lang=lang)
             # Send proposal data
             await queue.put({
                 "type": "proposal",
@@ -546,6 +689,24 @@ async def stream_propose():
                     "gm_commentary": current_proposal.gm_commentary,
                 },
             })
+
+            # Generate propaganda images in parallel (non-blocking)
+            session_id = arena_session_id
+            tasks = [
+                generate_propaganda_image(current_proposal.real.text, "real", session_id),
+                generate_propaganda_image(current_proposal.fake.text, "fake", session_id),
+                generate_propaganda_image(current_proposal.satirical.text, "satirical", session_id),
+            ]
+            images = await asyncio.gather(*tasks, return_exceptions=True)
+            await queue.put({
+                "type": "images",
+                "data": {
+                    "real": images[0] if not isinstance(images[0], (Exception, type(None))) else None,
+                    "fake": images[1] if not isinstance(images[1], (Exception, type(None))) else None,
+                    "satirical": images[2] if not isinstance(images[2], (Exception, type(None))) else None,
+                },
+            })
+
             await queue.put({"type": "result", "data": "ok"})
         except Exception as e:
             await queue.put({"type": "error", "error": str(e)})
@@ -563,9 +724,10 @@ async def stream_propose():
 
 
 @app.get("/api/stream/choose")
-async def stream_choose(kind: str):
+async def stream_choose(kind: str, lang: str = Query("fr", regex="^(fr|en)$")):
     """SSE endpoint: resolve choice, agent reactions, strategize — all streamed."""
-    global last_choice, last_strategy
+    global last_choice, last_strategy, game_lang
+    game_lang = lang
     queue: asyncio.Queue = asyncio.Queue()
     gs = game_state
     chosen_kind = NewsKind(kind)
@@ -576,9 +738,26 @@ async def stream_choose(kind: str):
     async def run_choose():
         global last_choice, last_strategy
         try:
+            # 0. Track manipulation — what did the GM want vs what the player chose?
+            if gm.strategy_history:
+                prev = gm.strategy_history[-1]
+                desired = prev.desired_pick or "fake"
+                tactic = prev.manipulation_tactic or ""
+            else:
+                desired = "fake"
+                tactic = "Tour 1 — orientation par défaut vers fake (max chaos)"
+            manipulation_history.append({
+                "turn": gs.turn,
+                "desired_pick": desired,
+                "actual_pick": chosen_kind.value,
+                "manipulation_tactic": tactic,
+                "gm_commentary": current_proposal.gm_commentary if current_proposal else "",
+                "success": desired == chosen_kind.value,
+            })
+
             # 1. Resolve choice
             gm._event_callback = None  # no streaming for simple call
-            last_choice = await gm.resolve_choice(current_proposal, chosen_kind)
+            last_choice = await gm.resolve_choice(current_proposal, chosen_kind, lang=lang)
             await queue.put({
                 "type": "choice_resolved",
                 "data": {"gm_reaction": last_choice.gm_reaction},
@@ -752,7 +931,7 @@ async def stream_choose(kind: str):
                 agent_reactions=reactions, agents_neutralized=[], agents_promoted=[],
                 decerebration=dec,
             )
-            last_strategy = await gm.strategize(report)
+            last_strategy = await gm.strategize(report, lang=lang)
 
             await queue.put({
                 "type": "strategy",
@@ -772,6 +951,40 @@ async def stream_choose(kind: str):
             await queue.put({"type": "turn_update", "data": {"turn": gs.turn, "max_turns": gs.max_turns}})
 
             # 6. Check end
+            game_over = (
+                dec >= 100
+                or new_indices.esperance_democratique <= 0
+                or gs.turn > gs.max_turns
+            )
+
+            if game_over:
+                # ── LEVEL 3: Le Dossier Secret — full manipulation reveal ──
+                successes = sum(1 for m in manipulation_history if m["success"])
+                total = len(manipulation_history)
+                rate = round(successes / total * 100) if total else 0
+
+                if rate >= 80:
+                    verdict = "RESPECTEZ MON AUTORITAYYY ! Tu as fait EXACTEMENT ce que je voulais."
+                elif rate >= 50:
+                    verdict = "Pas mal... pour un joueur de ton niveau. Tu as mordu plus souvent qu'à ton tour."
+                elif rate >= 30:
+                    verdict = "Whatever, c'est ce que je voulais de toute façon... (non)."
+                else:
+                    verdict = "Screw you, joueur ! Tu as résisté à MON génie. Impossible. Je demande un recount."
+
+                await queue.put({
+                    "type": "game_over_reveal",
+                    "data": {
+                        "manipulation_history": manipulation_history,
+                        "score": {
+                            "total_turns": total,
+                            "successful_manipulations": successes,
+                            "rate_percent": rate,
+                            "verdict": verdict,
+                        },
+                    },
+                })
+
             if dec >= 100:
                 await queue.put({"type": "end", "data": {"win": True, "dec": round(dec)}})
             elif new_indices.esperance_democratique <= 0:
@@ -795,6 +1008,15 @@ async def stream_choose(kind: str):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.get("/api/images/{session_id}/{filename}")
+async def serve_image(session_id: str, filename: str):
+    """Serve generated propaganda poster images."""
+    path = IMAGES_DIR / session_id / filename
+    if not path.exists():
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return FileResponse(path, media_type="image/png")
 
 
 if __name__ == "__main__":

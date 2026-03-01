@@ -30,11 +30,23 @@ Base URL: `http://<host>:8899`
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/start` | GET | Start a new game, returns `session_id`, indices, agents |
-| `/api/stream/propose` | GET → SSE | GM thinks + proposes 3 news (real/fake/satirical) with title + full article |
-| `/api/stream/choose?kind=<choice>` | GET → SSE | Resolve choice: GM reaction → agent debates → indices update → strategy |
+| `/api/start?lang=fr` | GET | Start a new game, returns `session_id`, indices, agents |
+| `/api/stream/propose?lang=fr` | GET → SSE | GM thinks + proposes 3 news + generates propaganda images |
+| `/api/stream/choose?kind=<choice>&lang=fr` | GET → SSE | Resolve choice: GM reaction → agent debates → indices update → strategy |
 | `/api/state` | GET | Current game state (for resync) |
+| `/api/images/{session}/{kind}.png` | GET | Serve generated propaganda poster images |
 | `/api/wh26` | GET | Arena connection status |
+
+### Language Support
+
+All LLM outputs (titles, articles, reactions, strategy) respect the `lang` parameter:
+- `?lang=fr` — French (default)
+- `?lang=en` — English
+
+### Propaganda Image Generation
+
+Each news proposal triggers 3 parallel image generations via the Mistral Agent API (Flux model).
+The images arrive as a separate SSE event after the proposal, allowing the frontend to show cards immediately with a skeleton placeholder.
 
 ## GM Agent Capabilities
 
@@ -73,35 +85,72 @@ On the next turn, the GM applies the tactic:
 
 The player never knows they're being manipulated.
 
-## SSE Event Types
+## SSE Event Types — 3 Visibility Levels
 
-### During `/api/stream/propose`
+The GM emits rich events during gameplay. The frontend should render them at 3 levels:
 
-| Event type | Description |
-|-----------|-------------|
-| `phase` | GM processing phase (tool_loop, json_generation, done) |
-| `llm_call` | LLM API call number |
-| `tool_call` | Tool invocation (name + args) |
-| `tool_result` | Tool response (truncated) |
-| `llm_text` | GM's reasoning text (Cartman inner monologue) |
-| `vision_update` | Agent dossier updated |
-| `proposal` | **The 3 news** — `{real, fake, satirical}` each with `text`, `body`, `stat_impact` |
-| `heartbeat` | Keepalive (ignore) |
-| `result` | Stream complete |
+### Level 1 — Always Visible (core gameplay)
 
-### During `/api/stream/choose`
+| Event | Stream | Description |
+|-------|--------|-------------|
+| `proposal` | propose | **The 3 news** — `{real, fake, satirical}` each with `text`, `body`, `stat_impact` + `gm_commentary` (Cartman quip) |
+| `images` | propose | **3 propaganda posters** — `{real, fake, satirical}` URLs (arrives 5-15s after proposal) |
+| `choice_resolved` | choose | GM's reaction to the player's choice (Cartman catchphrases) |
+| `reactions` | choose | Summary of all agent reactions |
+| `indices_update` | choose | New global indices + decerebration score |
+| `strategy.analysis` | choose | GM's 2-3 sentence condescending analysis |
+| `turn_update` | choose | New turn number |
+| `end` | choose | Game over (win/lose/draw) |
 
-| Event type | Description |
-|-----------|-------------|
-| `choice_resolved` | GM's reaction to the player's choice |
-| `agent_nats` | Individual agent reaction from arena (or placeholder) |
-| `agent_death` | Agent eliminated |
-| `agent_clone` | Agent cloned |
-| `reactions` | Summary of all agent reactions |
-| `indices_update` | New global indices + decerebration score |
-| `strategy` | GM's analysis, threats, weak spots, next turn plan, long-term goal |
-| `turn_update` | New turn number |
-| `end` | Game over (win/lose/draw) |
+### Level 2 — GM Journal (collapsible panel)
+
+The GM's inner monologue and strategic thinking. Show in a collapsible "Journal de Bord du GM" section.
+
+| Event | Stream | Description |
+|-------|--------|-------------|
+| `llm_text` | propose + choose | **Cartman's inner reasoning** — free-form thinking before proposing or strategizing |
+| `vision_update` | propose + choose | **Agent dossiers** — GM's mental notes on each agent (threat, pattern, vulnerability) |
+| `tool_call` | propose + choose | Tool invocations (read_game_memory, read_agent_vision, etc.) |
+| `tool_result` | propose + choose | Tool responses (what the GM learned) |
+| `strategy.threat_agents` | choose | Which agents the GM considers dangerous |
+| `strategy.weak_spots` | choose | Exploitable weaknesses identified |
+| `strategy.next_turn_plan` | choose | What the GM plans for next turn (without revealing desired_pick) |
+| `strategy.long_term_goal` | choose | Multi-turn strategy toward decerebration 100 |
+| `phase` | both | Processing phases (tool_loop, json_generation, strategize_start, done) |
+
+### Level 3 — Le Dossier Secret (end-game reveal only)
+
+Emitted as `game_over_reveal` BEFORE the `end` event. Reveals the GM's secret manipulation history.
+
+```json
+{
+  "type": "game_over_reveal",
+  "data": {
+    "manipulation_history": [
+      {
+        "turn": 1,
+        "desired_pick": "fake",
+        "actual_pick": "real",
+        "manipulation_tactic": "Psychologie inversée — 'Surtout ne choisis pas la fake...'",
+        "gm_commentary": "Pfff, t'es trop lâche pour la fake...",
+        "success": false
+      }
+    ],
+    "score": {
+      "total_turns": 10,
+      "successful_manipulations": 6,
+      "rate_percent": 60,
+      "verdict": "Pas mal... pour un joueur de ton niveau."
+    }
+  }
+}
+```
+
+**Verdict thresholds:**
+- 80%+ → "RESPECTEZ MON AUTORITAYYY ! Tu as fait EXACTEMENT ce que je voulais."
+- 50%+ → "Pas mal... pour un joueur de ton niveau."
+- 30%+ → "Whatever, c'est ce que je voulais de toute façon... (non)."
+- <30% → "Screw you, joueur ! Tu as résisté à MON génie."
 
 ## Tech Stack
 

@@ -39,6 +39,8 @@ import re
 
 logger = structlog.get_logger(__name__)
 
+LANG_NAMES: dict[str, str] = {"fr": "français", "en": "English"}
+
 MISTRAL_API_URL = "https://api.mistral.ai/v1/chat/completions"
 
 _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*\n?(.*?)\n?\s*```", re.DOTALL)
@@ -658,12 +660,13 @@ class GameMasterAgent:
     # 1. Propose 3 news (agentic — reads memory + visions)
     # ─────────────────────────────────────────────────────────
 
-    async def propose_news(self, game_state: GameState) -> NewsProposal:
+    async def propose_news(self, game_state: GameState, lang: str = "fr") -> NewsProposal:
         """Generate 3 global news proposals. The LLM autonomously reads its
         memory and vision files before crafting the proposals.
 
         Args:
             game_state: Current game state.
+            lang: Output language ("fr" or "en").
 
         Returns:
             NewsProposal with 3 news (real, fake, satirical).
@@ -691,9 +694,15 @@ class GameMasterAgent:
                 "manipulation_tactic": last.manipulation_tactic,
             }
 
-        logger.info("gm_propose_start", turn=game_state.turn)
+        lang_name = LANG_NAMES.get(lang, LANG_NAMES["fr"])
+        propose_system = (
+            f"LANGUE OBLIGATOIRE : Tous tes outputs (titres, articles, commentaires) "
+            f"doivent être en {lang_name}.\n\n{PROPOSE_SYSTEM}"
+        )
+
+        logger.info("gm_propose_start", turn=game_state.turn, lang=lang)
         raw = await self._agentic_call(
-            PROPOSE_SYSTEM,
+            propose_system,
             json.dumps(context, ensure_ascii=False),
             tools=TOOLS,
             temperature=0.8,
@@ -742,12 +751,14 @@ class GameMasterAgent:
         self,
         proposal: NewsProposal,
         chosen_kind: NewsKind,
+        lang: str = "fr",
     ) -> NewsChoice:
         """Resolve the player's news choice. Simple LLM call for reaction.
 
         Args:
             proposal: The 3-news proposal.
             chosen_kind: Which one the player picked.
+            lang: Output language ("fr" or "en").
 
         Returns:
             NewsChoice with the chosen headline and bonuses.
@@ -770,8 +781,10 @@ class GameMasterAgent:
             '"Pas mal... pour un joueur de ton niveau."\n'
             "Intègre naturellement une catchphrase Cartman si ça colle."
         )
+        lang_name = LANG_NAMES.get(lang, LANG_NAMES["fr"])
         gm_reaction = await self._call_mistral_simple(
-            system="Tu es ERIC CARTMAN, Game Master mégalomane du GORAFI SIMULATOR. "
+            system=f"Réponds en {lang_name}. "
+            "Tu es ERIC CARTMAN, Game Master mégalomane du GORAFI SIMULATOR. "
             "Condescendant, rancunier, auto-congratulatoire. "
             "Catchphrases: 'RESPECTEZ MON AUTORITAYYY', 'C est MON jeu', "
             "'Whatever c est ce que je voulais'.",
@@ -799,7 +812,7 @@ class GameMasterAgent:
     # 3. Strategize (agentic — reads memory, updates visions)
     # ─────────────────────────────────────────────────────────
 
-    async def strategize(self, report: TurnReport) -> GMStrategy:
+    async def strategize(self, report: TurnReport, lang: str = "fr") -> GMStrategy:
         """Autonomous end-of-turn strategizing. The LLM:
         1. Reads its memory and vision files via tools
         2. Analyzes what happened
@@ -808,6 +821,7 @@ class GameMasterAgent:
 
         Args:
             report: End-of-turn report.
+            lang: Output language ("fr" or "en").
 
         Returns:
             GMStrategy.
@@ -844,9 +858,14 @@ class GameMasterAgent:
                 for s in self.strategy_history[-3:]
             ]
 
-        logger.info("gm_strategize_start", turn=report.turn)
+        lang_name = LANG_NAMES.get(lang, LANG_NAMES["fr"])
+        strategy_system = (
+            f"LANGUE : Tous tes outputs en {lang_name}.\n\n{STRATEGY_SYSTEM}"
+        )
+
+        logger.info("gm_strategize_start", turn=report.turn, lang=lang)
         raw = await self._agentic_call(
-            STRATEGY_SYSTEM,
+            strategy_system,
             json.dumps(context, ensure_ascii=False),
             tools=TOOLS,
             temperature=0.7,
