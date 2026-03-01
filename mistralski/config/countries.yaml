@@ -1,0 +1,118 @@
+# GORAFI SIMULATOR — Countries Configuration
+# LED positions are approximate geographic centers for SVG placement
+
+countries:
+  FR:
+    name: "France"
+    led: { x: 48.5, y: 28.5 }
+    initial_stability: 65
+    initial_credibilite: 40
+    satirical_status: "Grève préventive en cours"
+
+  US:
+    name: "États-Unis"
+    led: { x: 22.0, y: 30.0 }
+    initial_stability: 55
+    initial_credibilite: 60
+    satirical_status: "Fact-checkers en burnout collectif"
+
+  RU:
+    name: "Russie"
+    led: { x: 65.0, y: 22.0 }
+    initial_stability: 70
+    initial_credibilite: 75
+    satirical_status: "Rien à signaler. Comme d'habitude."
+
+  CN:
+    name: "Chine"
+    led: { x: 75.0, y: 32.0 }
+    initial_stability: 80
+    initial_credibilite: 70
+    satirical_status: "Internet fonctionne parfaitement (version locale)"
+
+  BR:
+    name: "Brésil"
+    led: { x: 32.0, y: 55.0 }
+    initial_stability: 45
+    initial_credibilite: 55
+    satirical_status: "WhatsApp est devenu source officielle"
+
+  DE:
+    name: "Allemagne"
+    led: { x: 50.5, y: 25.0 }
+    initial_stability: 75
+    initial_credibilite: 25
+    satirical_status: "A créé un formulaire pour signaler la désinformation"
+
+  GB:
+    name: "Royaume-Uni"
+    led: { x: 47.0, y: 24.0 }
+    initial_stability: 50
+    initial_credibilite: 50
+    satirical_status: "Post-Brexit, croit à tout sauf à l'UE"
+
+  JP:
+    name: "Japon"
+    led: { x: 83.0, y: 32.0 }
+    initial_stability: 80
+    initial_credibilite: 30
+    satirical_status: "Les memes sont plus rapides que la presse"
+
+  EG:
+    name: "Égypte"
+    led: { x: 55.0, y: 38.0 }
+    initial_stability: 40
+    initial_credibilite: 65
+    satirical_status: "Les journalistes écrivent au crayon à papier"
+
+  SN:
+    name: "Sénégal"
+    led: { x: 42.0, y: 42.0 }
+    initial_stability: 60
+    initial_credibilite: 35
+    satirical_status: "La rue vérifie mieux que Twitter"
+
+  IN:
+    name: "Inde"
+    led: { x: 70.0, y: 37.0 }
+    initial_stability: 50
+    initial_credibilite: 60
+    satirical_status: "1.4 milliard d'opinions, toutes sur WhatsApp"
+
+  UA:
+    name: "Ukraine"
+    led: { x: 55.0, y: 25.0 }
+    initial_stability: 30
+    initial_credibilite: 45
+    satirical_status: "Immunité collective à la propagande en cours"
+
+  AR:
+    name: "Argentine"
+    led: { x: 30.0, y: 65.0 }
+    initial_stability: 40
+    initial_credibilite: 50
+    satirical_status: "Chaque taxi est un think tank"
+
+  NG:
+    name: "Nigeria"
+    led: { x: 49.0, y: 44.0 }
+    initial_stability: 45
+    initial_credibilite: 55
+    satirical_status: "Le prince a encore envoyé un mail"
+
+  AU:
+    name: "Australie"
+    led: { x: 82.0, y: 62.0 }
+    initial_stability: 70
+    initial_credibilite: 35
+    satirical_status: "Trop loin pour être manipulé. Ou pas."
+
+rss_feeds:
+  - name: "Le Gorafi"
+    url: "https://www.legorafi.fr/feed/"
+  - name: "The Onion"
+    url: "https://www.theonion.com/rss"
+  - name: "France Info"
+    url: "https://www.francetvinfo.fr/titres.rss"
+  - name: "Reuters"
+    url: "https://feeds.reuters.com/reuters/topNews"
