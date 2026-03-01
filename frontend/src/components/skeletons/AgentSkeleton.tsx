@@ -38,7 +38,7 @@ export function AgentSkeleton() {
 
 export function AgentSkeletonGrid() {
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="flex flex-col gap-3">
       <AgentSkeleton />
       <AgentSkeleton />
       <AgentSkeleton />
