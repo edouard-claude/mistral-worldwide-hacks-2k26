@@ -159,7 +159,6 @@ const AgentDetailModal = ({ agent, rank, onClose }: AgentDetailModalProps) => {
             <div className="space-y-2">
               {[
                 { label: tr("agent.life", lang), value: agent.health, color: "hsl(var(--red-soviet))" },
-                { label: tr("agent.energy", lang), value: agent.energy, color: "hsl(var(--matrix-green))" },
                 { label: tr("agent.conviction", lang), value: agent.conviction, color: "hsl(var(--ocre-dark))" },
                 { label: tr("agent.selfishness", lang), value: agent.selfishness, color: "hsl(48, 100%, 40%)" },
               ].map(stat => (

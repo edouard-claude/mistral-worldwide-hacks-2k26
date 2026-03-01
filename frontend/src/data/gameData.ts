@@ -18,7 +18,6 @@ export interface Agent {
   name: string;
   avatar: string;
   health: number;
-  energy: number;
   conviction: number; // how persuasive they are in debates
   selfishness: number; // how much they prioritize survival
   status: string;
@@ -183,68 +182,7 @@ export function generateMissions(n = 3, usedIndices: Set<number> = new Set()): {
 
 export const newsMissions: NewsMission[] = generateMissions(3).missions;
 
-// 4 agents always — winner replicates, loser dies
-// Their goal: SURVIVE, not spread chaos
-export const agents: Agent[] = [
-  {
-    id: "ag1",
-    name: "KGB_TR0LL",
-    avatar: "🥸",
-    health: 75,
-    energy: 80,
-    conviction: 85,
-    selfishness: 70,
-    status: "Dominant — 3 tours consécutifs",
-    alive: true,
-    opinion: "Cette news sert mes intérêts. Je vote POUR.",
-  },
-  {
-    id: "ag2",
-    name: "SABOT_1917",
-    avatar: "☭",
-    health: 90,
-    energy: 60,
-    conviction: 65,
-    selfishness: 40,
-    status: "Survivaliste prudent",
-    alive: true,
-    opinion: "Trop risqué. Ça pourrait me retomber dessus.",
-  },
-  {
-    id: "ag3",
-    name: "PROPA_GUERILLA",
-    avatar: "🐻",
-    health: 25,
-    energy: 15,
-    conviction: 90,
-    selfishness: 95,
-    status: "EN DANGER — dernier tour ?",
-    alive: true,
-    opinion: "Je dois convaincre les autres ou je meurs.",
-  },
-  {
-    id: "ag4",
-    name: "MOUSTACHE_BOT",
-    avatar: "📻",
-    health: 60,
-    energy: 45,
-    conviction: 55,
-    selfishness: 60,
-    status: "Observateur calculateur",
-    alive: true,
-    opinion: "J'attends de voir qui prend le lead...",
-  },
-];
-
-// Agent debate lines — they argue about the selected news
-export const debateLines: DebateLine[] = [
-  { agent: "KGB_TR0LL", message: "Cette news va marcher. Qui est avec moi ?", type: "argument" },
-  { agent: "PROPA_GUERILLA", message: "Si ça foire, c'est MOI qui paie. Je m'oppose.", type: "defense" },
-  { agent: "SABOT_1917", message: "GUERILLA a raison, le risque est trop élevé pour nous.", type: "argument" },
-  { agent: "KGB_TR0LL", message: "GUERILLA, tu n'as plus le choix. Suis-moi ou disparais.", type: "attack" },
-  { agent: "MOUSTACHE_BOT", message: "...je vote avec KGB_TR0LL. Désolé GUERILLA.", type: "reaction" },
-  { agent: "PROPA_GUERILLA", message: "Bande de traîtres. Je survivrai quand même.", type: "defense" },
-];
+// Note: Agents and debateLines now come from WebSocket, no hardcoded data
 
 export const politicalSpectrum = [
   { label: "EXTRÊME GAUCHE", value: 85, color: "hsl(0, 100%, 40%)" },

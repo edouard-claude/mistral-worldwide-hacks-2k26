@@ -413,7 +413,7 @@ function dispatchWsEvent(
       const content = (data.content || String(data)).replace(/\\n/g, "\n");
       dispatch({
         type: "ADD_TERMINAL_LINE",
-        line: { type: "vision_update", text: `VISION ${data.agent_id || ""}: ${content}` },
+        line: { type: "vision_update", text: content, agentId: data.agent_id },
       });
       break;
     }
@@ -529,8 +529,7 @@ function dispatchWsEvent(
 
       // Pattern: state.global (omniscient state from swarm)
       if (parts.length >= 2 && parts[0] === "state" && parts[1] === "global") {
-        // TODO: Handle global state updates if needed
-        console.log("[WS] Global state update:", data);
+        dispatch({ type: "ARENA_GLOBAL_STATE", payload: data });
         break;
       }
 

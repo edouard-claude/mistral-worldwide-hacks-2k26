@@ -88,7 +88,7 @@ const GameMasterCard = ({ agents, gameState, turnPhase, turnResult, gmVisions, g
                 alive.map(agent => {
                   const fallback = agent.health < 25 ? tr("gm.nearElim", lang)
                     : agent.conviction > 70 ? tr("gm.strongDebate", lang)
-                    : agent.energy < 30 ? tr("gm.exhausted", lang)
+                    : agent.selfishness > 70 ? tr("gm.selfish", lang)
                     : tr("gm.averageProfile", lang);
                   return (
                     <div key={agent.id} className="border-2 border-soviet-black/20 p-2.5 flex gap-3 items-start"

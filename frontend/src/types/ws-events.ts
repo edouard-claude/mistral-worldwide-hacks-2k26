@@ -47,6 +47,7 @@ export interface GmTerminalLine {
     | "strategy"
     | "info";
   text: string;
+  agentId?: string;
 }
 
 // ============================================================================
@@ -59,7 +60,6 @@ export interface FallenAgent {
     name: string;
     avatar: string;
     health: number;
-    energy: number;
     conviction: number;
     selfishness: number;
     status: string;
@@ -223,6 +223,28 @@ export interface ArenaEndPayload {
   history: unknown;
 }
 
+// Swarm Agent (from Go swarm via state.global)
+export interface SwarmAgent {
+  id: string;
+  name: string;
+  political_color: number;  // 0.0-1.0
+  temperature: number;      // 0.0-1.0
+  confidence: number;       // 1-5
+  alive: boolean;
+  parent_id?: string;
+  born_at_round: number;
+  avatar_url?: string;      // injected by relay
+}
+
+export interface ArenaGlobalStatePayload {
+  session_id: string;
+  round: number;
+  phase: number;
+  agents: SwarmAgent[];
+  graveyard?: SwarmAgent[];
+  scores?: Record<string, number>;
+}
+
 export interface ArenaWaitingPayload {
   round: number;
   waiting: boolean;
@@ -275,6 +297,7 @@ export type GameAction =
   | { type: "ARENA_CLONE"; payload: ArenaClonePayload }
   | { type: "ARENA_END"; payload: ArenaEndPayload }
   | { type: "ARENA_WAITING"; payload: ArenaWaitingPayload }
+  | { type: "ARENA_GLOBAL_STATE"; payload: ArenaGlobalStatePayload }
   // Agent message
   | { type: "AGENT_NATS"; payload: AgentNatsPayload }
   // UI Actions

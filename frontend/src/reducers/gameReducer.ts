@@ -19,6 +19,7 @@ import type {
   GameAction,
   BackendAgent,
   BackendIndices,
+  SwarmAgent,
 } from "@/types/ws-events";
 
 // ============================================================================
@@ -198,12 +199,25 @@ function mapAgent(ba: BackendAgent): Agent {
     name: ba.name,
     avatar: ba.avatar || "🤖",
     health: ba.health ?? stats.confiance ?? 75,
-    energy: ba.energy ?? 60,
     conviction: ba.conviction ?? stats.croyance ?? 70,
     selfishness: ba.selfishness ?? stats.richesse ?? 50,
     status: ba.status || (ba as any).status_text || (ba as any).personality || ba.name,
     alive: ba.alive !== false && !(ba as any).is_neutralized,
     opinion: ba.opinion || (ba as any).personality || "",
+  };
+}
+
+function mapSwarmAgent(sa: SwarmAgent): Agent {
+  return {
+    id: sa.id,
+    name: sa.name,
+    avatar: sa.avatar_url || "🤖",
+    health: clamp(sa.confidence * 20, 0, 100),          // 1-5 → 20-100, clamped
+    conviction: clamp(Math.round(sa.political_color * 100)),  // 0.0-1.0 → 0-100
+    selfishness: clamp(Math.round(sa.temperature * 100)),     // 0.0-1.0 → 0-100
+    status: sa.parent_id ? "Clone" : sa.name,
+    alive: sa.alive,
+    opinion: "",
   };
 }
 
@@ -297,7 +311,7 @@ export function gameReducer(state: FullGameState, action: GameAction): FullGameS
         liveAgents: agents,
         gameState: indices,
         turnPhase: "proposing",
-        loading: { agents: false, news: true, images: true, debate: false },
+        loading: { agents: true, news: true, images: true, debate: false },
         isStreaming: true,
         needsPropose: true,
       };
@@ -544,7 +558,6 @@ export function gameReducer(state: FullGameState, action: GameAction): FullGameS
           name: action.payload.agent_name || deadAgentId,
           avatar: "💀",
           health: 0,
-          energy: 0,
           conviction: 0,
           selfishness: 0,
           status: "ÉLIMINÉ",
@@ -573,16 +586,19 @@ export function gameReducer(state: FullGameState, action: GameAction): FullGameS
         type: "reaction",
       };
 
-      // Add new agent
+      // Find parent agent to inherit stats (will be corrected by next state.global)
+      const parent = state.liveAgents.find(a => a.id === action.payload.parent_id);
+      if (!parent) {
+        console.warn(`[ARENA_CLONE] Parent agent ${action.payload.parent_id} not found, using defaults`);
+      }
       const newAgent: Agent = {
         id: action.payload.child_id,
         name: action.payload.child_name,
-        avatar: "🧬",
-        health: 75,
-        energy: 60,
-        conviction: 70,
-        selfishness: 50,
-        status: "Nouveau clone",
+        avatar: parent?.avatar || "🧬",
+        health: parent?.health || 75,
+        conviction: parent?.conviction || 70,
+        selfishness: parent?.selfishness || 50,
+        status: "Clone",
         alive: true,
         opinion: "",
       };
@@ -609,6 +625,16 @@ export function gameReducer(state: FullGameState, action: GameAction): FullGameS
         turnPhase: "results",
         turnTransition: true,
         needsPropose: true,
+      };
+    }
+
+    case "ARENA_GLOBAL_STATE": {
+      // Replace all agents with swarm agents
+      const swarmAgents = action.payload.agents.map(mapSwarmAgent);
+      return {
+        ...state,
+        liveAgents: swarmAgents,
+        loading: { ...state.loading, agents: false },
       };
     }
 
