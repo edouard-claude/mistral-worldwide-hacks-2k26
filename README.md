@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/banner.png" alt="GORAFI SIMULATOR — Département de la Vérité Alternative" width="800">
+</p>
+
 # MISTRAL WORLDWIDE HACKS 2K26
 
 > Hackathon submissions. Each folder = one project.
