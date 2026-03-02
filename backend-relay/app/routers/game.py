@@ -21,33 +21,30 @@ def _get_sm(request: Request) -> SessionManager:
 
 
 @router.get("/start")
-async def start_game(request: Request, lang: str = "fr") -> JSONResponse:
+async def start_game(request: Request, session_id: str = "", lang: str = "fr") -> JSONResponse:
     gm = _get_gm(request)
     sm = _get_sm(request)
-    nats_relay = request.app.state.nats_relay
+
+    # session_id comes from the frontend (set during init_session).
+    # If missing, fall back to first known session (backward compat).
+    if not session_id:
+        logger.warning("/api/start called without session_id")
 
     try:
-        result = await gm.start_game(lang)
+        # Pass the relay session_id to GM so it uses the SAME session
+        result = await gm.start_game(session_id, lang)
     except Exception:
         logger.exception("Failed to call GM /api/start")
         return JSONResponse(status_code=502, content={"error": "GM unreachable"})
 
-    # Extract session_id from GM response and create relay session
+    # Store gm_session_id mapping (should be identical to session_id now)
     gm_session_id = result.get("session_id")
-    if gm_session_id:
-        try:
-            session = await sm.create_session(gm_session_id, lang=lang)
-            session.gm_session_id = gm_session_id
-        except FileExistsError:
-            pass  # Session already exists, that's fine
+    session = sm.get_session(session_id) or sm.get_session(gm_session_id or "")
+    if session and gm_session_id:
+        session.gm_session_id = gm_session_id
 
-        # Publish init to NATS so swarm starts listening for this session
-        if nats_relay.is_connected:
-            try:
-                await nats_relay.publish_init(gm_session_id, {"lang": lang})
-                logger.info("Published arena.init for session %s", gm_session_id)
-            except Exception:
-                logger.exception("Failed to publish arena.init for session %s", gm_session_id)
+    # NOTE: arena.init was already published by init_session (arena.py).
+    # We do NOT publish a second one here — that caused zombie swarm sessions.
 
     return JSONResponse(content=result)
 

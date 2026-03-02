@@ -33,13 +33,14 @@ from src.models.world import GlobalIndices, NewsKind
 
 # ── wh26 backend state ───────────────────────────────────────────
 
-WH26_BASE_URL = "http://wh26-backend.wh26.edouard.cl"
-WH26_WS_URL = "ws://wh26-backend.wh26.edouard.cl"
+WH26_BASE_URL = os.environ.get("WH26_BASE_URL", "http://wh26-backend.wh26.edouard.cl")
+WH26_WS_URL = os.environ.get("WH26_WS_URL", "ws://wh26-backend.wh26.edouard.cl")
 
-arena_session_id: str = str(uuid.uuid4())
+arena_session_id: str | None = None  # Set per game by /api/start
 wh26_ws: websockets.ClientConnection | None = None
 wh26_ws_queue: asyncio.Queue = asyncio.Queue()
 wh26_connected: bool = False
+_wh26_ws_task: asyncio.Task | None = None  # Background WS reader task
 
 # ── Language & Image generation state ────────────────────────────
 game_lang: str = "fr"
@@ -58,7 +59,11 @@ BRANDING_PROMPT = (
 
 
 async def _wh26_ws_reader(ws: websockets.ClientConnection) -> None:
-    """Background task: read WS messages from wh26 and put them in the queue."""
+    """Background task: read WS messages from wh26 and put them in the queue.
+
+    On disconnect, attempts reconnection with exponential backoff up to 3 times.
+    """
+    global wh26_ws, wh26_connected
     try:
         async for raw in ws:
             try:
@@ -71,33 +76,71 @@ async def _wh26_ws_reader(ws: websockets.ClientConnection) -> None:
     except Exception as e:
         print(f"[WH26] WS reader error: {e}")
 
+    # Mark as disconnected
+    wh26_connected = False
+    wh26_ws = None
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Connect to wh26 backend on startup: POST /init_session + open WS."""
-    global wh26_ws, wh26_connected
-    ws_task = None
+    # Attempt reconnection if we still have a session
+    if arena_session_id:
+        for attempt in range(1, 4):
+            delay = 2 ** attempt
+            print(f"[WH26] Reconnecting in {delay}s (attempt {attempt}/3)...")
+            await asyncio.sleep(delay)
+            try:
+                new_ws = await websockets.connect(f"{WH26_WS_URL}/ws/{arena_session_id}")
+                wh26_ws = new_ws
+                wh26_connected = True
+                print(f"[WH26] Reconnected to /ws/{arena_session_id}")
+                # Restart reader loop recursively on the new connection
+                await _wh26_ws_reader(new_ws)
+                return
+            except Exception as e:
+                print(f"[WH26] Reconnect attempt {attempt} failed: {e}")
+        print("[WH26] All reconnection attempts exhausted")
+
+
+async def _connect_wh26(session_id: str) -> None:
+    """Connect WS to wh26 backend relay for the given session.
+
+    Handles init_session POST + WebSocket open. Safe to call multiple times
+    (disconnects previous WS first).
+    """
+    global wh26_ws, wh26_connected, _wh26_ws_task
+
+    # Tear down previous connection if any
+    if wh26_ws:
+        try:
+            await wh26_ws.close()
+        except Exception:
+            pass
+        wh26_ws = None
+        wh26_connected = False
+    if _wh26_ws_task and not _wh26_ws_task.done():
+        _wh26_ws_task.cancel()
+        _wh26_ws_task = None
+
+    # Drain stale messages
+    while not wh26_ws_queue.empty():
+        try:
+            wh26_ws_queue.get_nowait()
+        except asyncio.QueueEmpty:
+            break
+
     try:
-        # 1. Initialize session via HTTP
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                f"{WH26_BASE_URL}/init_session",
-                json={"session_id": arena_session_id},
-                timeout=10.0,
-            )
-            resp.raise_for_status()
-            print(f"[WH26] Session initialized: {arena_session_id}")
-
-        # 2. Open WebSocket
-        wh26_ws = await websockets.connect(f"{WH26_WS_URL}/ws/{arena_session_id}")
+        # Open WebSocket (session is already created by the relay before calling GM)
+        wh26_ws = await websockets.connect(f"{WH26_WS_URL}/ws/{session_id}")
         wh26_connected = True
-        ws_task = asyncio.create_task(_wh26_ws_reader(wh26_ws))
-        print(f"[WH26] WebSocket connected: /ws/{arena_session_id}")
+        _wh26_ws_task = asyncio.create_task(_wh26_ws_reader(wh26_ws))
+        print(f"[WH26] WebSocket connected: /ws/{session_id}")
     except Exception as e:
         print(f"[WH26] Connection failed ({e}) — running without arena")
         wh26_ws = None
         wh26_connected = False
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan — initialize image agent."""
     # Create Mistral image generation agent via SDK
     global mistral_img_client, mistral_img_agent_id
     try:
@@ -123,8 +166,8 @@ async def lifespan(app: FastAPI):
     if wh26_ws:
         await wh26_ws.close()
         print("[WH26] WebSocket closed")
-    if ws_task:
-        ws_task.cancel()
+    if _wh26_ws_task and not _wh26_ws_task.done():
+        _wh26_ws_task.cancel()
 
 
 # ── App state ────────────────────────────────────────────────────
@@ -543,10 +586,17 @@ async def api_wh26():
 
 
 @app.get("/api/start")
-async def api_start(lang: str = Query("fr", regex="^(fr|en)$")):
-    global gm, game_state, game_lang, manipulation_history
+async def api_start(
+    session_id: str | None = Query(None),
+    lang: str = Query("fr", regex="^(fr|en)$"),
+):
+    global gm, game_state, game_lang, manipulation_history, arena_session_id
     game_lang = lang
     manipulation_history = []
+
+    # Accept external session_id (from relay) or generate one
+    arena_session_id = session_id or str(uuid.uuid4())
+
     if MEMORY_DIR.exists():
         shutil.rmtree(MEMORY_DIR)
     gm = GameMasterAgent()
@@ -556,6 +606,10 @@ async def api_start(lang: str = Query("fr", regex="^(fr|en)$")):
         agents=[a.model_copy() for a in AGENTS_INIT],
         indice_mondial_decerebration=0.0,
     )
+
+    # Connect WS to relay for this session
+    await _connect_wh26(arena_session_id)
+
     return {
         "session_id": arena_session_id,
         "turn": game_state.turn,
@@ -599,24 +653,9 @@ async def stream_propose(lang: str = Query("fr", regex="^(fr|en)$")):
         try:
             current_proposal = await gm.propose_news(gs, lang=lang)
 
-            # Build GM's hidden recommendation from last strategy
-            if gm.strategy_history:
-                prev = gm.strategy_history[-1]
-                gm_secret = {
-                    "desired_pick": prev.desired_pick or "fake",
-                    "manipulation_tactic": prev.manipulation_tactic or "",
-                    "next_turn_plan": prev.next_turn_plan or "",
-                }
-            else:
-                gm_secret = {
-                    "desired_pick": "fake",
-                    "manipulation_tactic": "Turn 1 — default orientation toward fake (max chaos)"
-                    if lang == "en"
-                    else "Tour 1 — orientation par défaut vers fake (max chaos)",
-                    "next_turn_plan": "",
-                }
-
             # Send proposal data immediately (don't wait for images)
+            # NOTE: gm_secret is NOT sent to the client — it stays server-side
+            # and is recorded in manipulation_history for the end-game reveal.
             await queue.put({
                 "type": "proposal",
                 "data": {
@@ -624,7 +663,6 @@ async def stream_propose(lang: str = Query("fr", regex="^(fr|en)$")):
                     "fake": {"text": current_proposal.fake.text, "body": current_proposal.fake.body, "stat_impact": current_proposal.fake.stat_impact},
                     "satirical": {"text": current_proposal.satirical.text, "body": current_proposal.satirical.body, "stat_impact": current_proposal.satirical.stat_impact},
                     "gm_commentary": current_proposal.gm_commentary,
-                    "gm_secret": gm_secret,
                 },
             })
 
@@ -805,16 +843,17 @@ async def stream_choose(kind: str, lang: str = Query("fr", regex="^(fr|en)$")):
                     "phase": "wh26 non connecte — reactions agents indisponibles",
                 })
 
-            # Build AgentReaction list from wh26 arena data
-            for agent in gs.agents:
-                if agent.is_neutralized:
-                    continue
-                arena_data = agent_outputs.get(agent.agent_id, {})
-                if arena_data:
+            # Build AgentReaction list from wh26 arena data.
+            # Swarm agent IDs are UUIDs (not agent_01..04), so we match
+            # by collecting all arena outputs in order rather than by ID.
+            arena_outputs_list = list(agent_outputs.values())
+            active_agents = [a for a in gs.agents if not a.is_neutralized]
+            for idx, agent in enumerate(active_agents):
+                if idx < len(arena_outputs_list):
+                    arena_data = arena_outputs_list[idx]
                     text = arena_data.get("take", arena_data.get("text", "..."))
                     stat_changes = arena_data.get("stat_changes", {})
                 else:
-                    # No arena data for this agent — skip (wh26 may not have this agent)
                     text = "[pas de reaction — wh26 non disponible]"
                     stat_changes = {}
                 reactions.append(AgentReaction(

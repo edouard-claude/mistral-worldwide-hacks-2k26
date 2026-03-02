@@ -24,11 +24,11 @@ export async function fetchApi<T = unknown>(path: string): Promise<T> {
 /**
  * Initialize a new session with the relay — triggers NATS arena.init for swarm
  */
-export async function initSession(sessionId: string): Promise<void> {
+export async function initSession(sessionId: string, lang: string = "fr"): Promise<void> {
   const res = await fetch(`${BASE_URL}/init_session`, {
     method: "POST",
     headers: { ...HEADERS, "Content-Type": "application/json" },
-    body: JSON.stringify({ session_id: sessionId }),
+    body: JSON.stringify({ session_id: sessionId, lang }),
   });
   if (!res.ok) {
     throw new Error(`Init session error ${res.status}: ${res.statusText}`);

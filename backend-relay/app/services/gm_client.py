@@ -21,8 +21,10 @@ class GMClient:
     def is_ready(self) -> bool:
         return not self._client.is_closed
 
-    async def start_game(self, lang: str = "fr") -> dict:
-        resp = await self._client.get("/api/start", params={"lang": lang})
+    async def start_game(self, session_id: str, lang: str = "fr") -> dict:
+        resp = await self._client.get(
+            "/api/start", params={"session_id": session_id, "lang": lang}
+        )
         resp.raise_for_status()
         return resp.json()
 

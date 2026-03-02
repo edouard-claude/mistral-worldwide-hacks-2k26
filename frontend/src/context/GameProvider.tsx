@@ -39,52 +39,56 @@ export function GameProvider({ children }: GameProviderProps) {
   // WebSocket Connection
   // ========================================================================
 
-  const connectWebSocket = useCallback((sessionId: string) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.close();
-    }
-
-    dispatch({ type: "WS_CONNECTING" });
-
-    const ws = new WebSocket(`${WS_BASE_URL}/ws/${sessionId}`);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      console.log("[WS] Connected to", sessionId);
-      dispatch({ type: "WS_CONNECTED" });
-      reconnectAttemptRef.current = 0;
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        // Backend-relay sends { subject, data }, GM sends { event/type, data }
-        const eventType = msg.subject || msg.event || msg.type || "";
-        const data = msg.data ?? msg;
-
-        console.log("[WS] Event:", eventType, data);
-
-        // Map WebSocket events to reducer actions
-        dispatchWsEvent(eventType, data, dispatch);
-      } catch (err) {
-        console.error("[WS] Parse error:", err, event.data);
+  const connectWebSocket = useCallback((sessionId: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.close();
       }
-    };
 
-    ws.onclose = (event) => {
-      console.log("[WS] Closed:", event.code, event.reason);
-      dispatch({ type: "WS_DISCONNECTED" });
+      dispatch({ type: "WS_CONNECTING" });
 
-      // Attempt reconnect with exponential backoff
-      if (sessionIdRef.current && event.code !== 1000) {
-        scheduleReconnect();
-      }
-    };
+      const ws = new WebSocket(`${WS_BASE_URL}/ws/${sessionId}`);
+      wsRef.current = ws;
 
-    ws.onerror = (error) => {
-      console.error("[WS] Error:", error);
-      dispatch({ type: "WS_ERROR", error: "WebSocket connection error" });
-    };
+      ws.onopen = () => {
+        console.log("[WS] Connected to", sessionId);
+        dispatch({ type: "WS_CONNECTED" });
+        reconnectAttemptRef.current = 0;
+        resolve();
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          // Backend-relay sends { subject, data }, GM sends { event/type, data }
+          const eventType = msg.subject || msg.event || msg.type || "";
+          const data = msg.data ?? msg;
+
+          console.log("[WS] Event:", eventType, data);
+
+          // Map WebSocket events to reducer actions
+          dispatchWsEvent(eventType, data, dispatch);
+        } catch (err) {
+          console.error("[WS] Parse error:", err, event.data);
+        }
+      };
+
+      ws.onclose = (event) => {
+        console.log("[WS] Closed:", event.code, event.reason);
+        dispatch({ type: "WS_DISCONNECTED" });
+
+        // Attempt reconnect with exponential backoff
+        if (sessionIdRef.current && event.code !== 1000) {
+          scheduleReconnect();
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error("[WS] Error:", error);
+        dispatch({ type: "WS_ERROR", error: "WebSocket connection error" });
+        reject(new Error("WebSocket connection failed"));
+      };
+    });
   }, []);
 
   const scheduleReconnect = useCallback(() => {
@@ -159,14 +163,14 @@ export function GameProvider({ children }: GameProviderProps) {
       console.log("[API] Generated session:", sessionId);
 
       // 2. Initialize session with relay (triggers NATS arena.init for swarm)
-      await initSession(sessionId);
+      await initSession(sessionId, langRef.current);
       console.log("[API] Session initialized");
 
       // 3. Connect WebSocket BEFORE calling start so we don't miss events
       sessionIdRef.current = sessionId;
-      connectWebSocket(sessionId);
+      await connectWebSocket(sessionId);
 
-      // 4. Start game with the session
+      // 4. Start game with the session (WS is guaranteed open now)
       const data = await apiStartGame(sessionId, langRef.current);
 
       dispatch({

@@ -35,6 +35,7 @@ async def init_session(body: InitSessionInput, request: Request) -> JSONResponse
         )
 
     query_params = dict(request.query_params)
+    query_params.setdefault("lang", body.lang)
     await nats_relay.publish_init(body.session_id, query_params)
 
     return JSONResponse(

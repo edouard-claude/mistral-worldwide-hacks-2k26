@@ -137,11 +137,13 @@ class NatsRelay:
             raise RuntimeError("NATS is not connected")
         topic = "arena.init"
         payload_dict: dict = {"session_id": session_id}
+        # Put lang at top-level so Go swarm can parse it directly
         if query_params:
-            payload_dict["query_params"] = query_params
+            if "lang" in query_params:
+                payload_dict["lang"] = query_params["lang"]
         payload = json.dumps(payload_dict).encode("utf-8")
         await self._nc.publish(topic, payload)
-        logger.info("Published init to %s for session %s", topic, session_id)
+        logger.info("Published init to %s for session %s (lang=%s)", topic, session_id, payload_dict.get("lang", "fr"))
 
     async def publish_fakenews(self, session_id: str, content: str, query_params: dict | None = None) -> None:
         if not self._nc.is_connected:

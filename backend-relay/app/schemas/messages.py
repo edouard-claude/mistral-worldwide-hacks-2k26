@@ -7,6 +7,7 @@ SESSION_ID_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")
 
 class InitSessionInput(BaseModel):
     session_id: str
+    lang: str = "fr"
 
     @field_validator("session_id")
     @classmethod
