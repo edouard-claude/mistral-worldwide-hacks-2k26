@@ -482,6 +482,8 @@ export function gameReducer(state: FullGameState, action: GameAction): FullGameS
           turn: action.payload.turn ?? state.gameState.turn,
           maxTurns: action.payload.max_turns ?? state.gameState.maxTurns,
         },
+        turnPhase: "results",
+        turnTransition: true,
       };
 
     case "GM_INDICES": {
@@ -620,13 +622,7 @@ export function gameReducer(state: FullGameState, action: GameAction): FullGameS
       const text = state.lang === "fr"
         ? `En attente de nouvelle news (round ${action.payload.round})`
         : `Waiting for new news (round ${action.payload.round})`;
-      const updated = addTerminalLine(state, "info", text);
-      return {
-        ...updated,
-        turnPhase: "results",
-        turnTransition: true,
-        needsPropose: true,
-      };
+      return addTerminalLine(state, "info", text);
     }
 
     case "ARENA_GLOBAL_STATE": {

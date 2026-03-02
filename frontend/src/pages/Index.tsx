@@ -151,7 +151,7 @@ const GameDashboard = () => {
                   color: "hsl(var(--comic-yellow))",
                   textShadow: "3px 3px 0px hsl(var(--red-dark)), 5px 5px 0px hsl(var(--black))",
                 }}>
-                {tr("topbar.turn", lang)} {gameState.turn + 1}
+                {tr("topbar.turn", lang)} {gameState.turn}
               </p>
               <p className="text-sm mt-2 tracking-[0.2em] uppercase font-bold"
                 style={{ color: "hsl(var(--ocre-gulag))" }}>

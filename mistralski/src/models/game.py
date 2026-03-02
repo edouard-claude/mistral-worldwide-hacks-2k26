@@ -49,6 +49,7 @@ class TurnReport(BaseModel):
     agents_neutralized: list[str] = Field(default_factory=list)
     agents_promoted: list[str] = Field(default_factory=list)
     decerebration: float = 0.0
+    arena_state: dict | None = None
 
 
 class GMStrategy(BaseModel):

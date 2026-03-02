@@ -742,6 +742,7 @@ async def stream_choose(kind: str, lang: str = Query("fr", regex="^(fr|en)$")):
             # 2. Agent reactions via wh26 backend (fallback to placeholders)
             reactions = []
             agent_outputs: dict[str, dict] = {}
+            arena_global_state: dict | None = None
 
             if wh26_connected and wh26_ws:
                 # Submit chosen news to wh26 arena via HTTP POST
@@ -820,6 +821,19 @@ async def stream_choose(kind: str, lang: str = Query("fr", regex="^(fr|en)$")):
                                     "phase": "Arena round terminé",
                                 })
                                 round_done = True
+                            elif subject == "state.global":
+                                # Store swarm global state for strategize
+                                arena_global_state = payload
+                                if "agents" in payload:
+                                    for swarm_agent in payload["agents"]:
+                                        aid = swarm_agent.get("id", "")
+                                        agent_outputs[aid] = {
+                                            **agent_outputs.get(aid, {}),
+                                            "swarm_score": swarm_agent.get("score", 0),
+                                            "swarm_status": swarm_agent.get("status", "alive"),
+                                        }
+                                await queue.put({"type": "phase", "phase": "Arena global state received"})
+                                print(f"[WH26] state.global received: {len(payload.get('agents', []))} agents")
                             elif subject == "input.waiting":
                                 # Arena is waiting for next input — round is done for us
                                 round_done = True
@@ -906,6 +920,7 @@ async def stream_choose(kind: str, lang: str = Query("fr", regex="^(fr|en)$")):
                 indices_before=indices_before, indices_after=new_indices,
                 agent_reactions=reactions, agents_neutralized=[], agents_promoted=[],
                 decerebration=dec,
+                arena_state=arena_global_state,
             )
             last_strategy = await gm.strategize(report, lang=lang)
 

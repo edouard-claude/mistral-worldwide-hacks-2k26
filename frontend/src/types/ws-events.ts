@@ -12,6 +12,7 @@ export type TurnPhase =
   | "select_news"
   | "proposing"
   | "debating"
+  | "debating_done"
   | "resolving"
   | "results"
   | "error";
