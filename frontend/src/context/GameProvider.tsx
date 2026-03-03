@@ -133,6 +133,11 @@ export function GameProvider({ children }: GameProviderProps) {
       // Clear the flag FIRST to prevent re-triggers
       dispatch({ type: "CLEAR_NEEDS_PROPOSE" });
 
+      // Transition UI: clear modal, reset to "proposing" phase
+      if (state.turnTransition) {
+        dispatch({ type: "TRIGGER_NEXT_TURN" });
+      }
+
       // Add separator line
       const turnText = `══ ${tr("engine.tour", langRef.current)} ${state.gameState.turn} — ${tr("engine.propose", langRef.current)} ══`;
       dispatch({ type: "ADD_TERMINAL_LINE", line: { type: "separator", text: turnText } });
