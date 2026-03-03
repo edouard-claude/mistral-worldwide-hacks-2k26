@@ -165,6 +165,18 @@ func runGame(sessionID string, lang string, rawNC *nats.Conn, mistral *MistralCl
 	}
 	fmt.Println()
 
+	// Publish initial global state so GM knows agent names/stats from the start
+	_ = natsClient.PublishGlobalState(GlobalState{
+		SessionID: session.ID,
+		FakeNews:  "",
+		Round:     0,
+		Phase:     0,
+		Lang:      lang,
+		Agents:    GetAliveAgents(session),
+		Graveyard: session.Graveyard,
+	})
+	fmt.Printf("[%s] 📡 Initial state.global published (%d agents)\n", sessionID, len(GetAliveAgents(session)))
+
 	// Create phase runner
 	runner := NewPhaseRunner(session, mistral, natsClient, timeout)
 

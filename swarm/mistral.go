@@ -66,7 +66,7 @@ func NewMistralClient(timeout time.Duration) (*MistralClient, error) {
 // Complete sends a chat completion request to Mistral
 func (c *MistralClient) Complete(ctx context.Context, systemPrompt, userPrompt string, temperature float64) (string, error) {
 	req := MistralRequest{
-		Model: "mistral-small-3.2",
+		Model: "mistral-small-latest",
 		Messages: []MistralMessage{
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: userPrompt},
