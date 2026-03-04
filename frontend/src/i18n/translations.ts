@@ -121,6 +121,18 @@ const t = {
   "agent.high": { fr: "ÉLEVÉ", en: "HIGH" },
   "agent.moderate": { fr: "MODÉRÉ", en: "MODERATE" },
   "agent.low": { fr: "FAIBLE", en: "LOW" },
+  "agent.debateHistory": { fr: "HISTORIQUE DES DÉBATS", en: "DEBATE HISTORY" },
+  "agent.round": { fr: "ROUND", en: "ROUND" },
+  "agent.phase1": { fr: "COGITATION", en: "COGITATION" },
+  "agent.phase2": { fr: "PRISE DE PAROLE", en: "PUBLIC TAKE" },
+  "agent.phase3": { fr: "RÉVISION", en: "REVISION" },
+  "agent.phase4": { fr: "VOTE", en: "VOTE" },
+  "agent.confidence": { fr: "Confiance", en: "Confidence" },
+  "agent.rankings": { fr: "Classement", en: "Rankings" },
+  "agent.politicalShift": { fr: "Shift politique", en: "Political shift" },
+  "agent.noHistory": { fr: "Aucune donnée de débat disponible.", en: "No debate data available." },
+  "agent.currentRound": { fr: "ROUND EN COURS", en: "CURRENT ROUND" },
+  "agent.pastRounds": { fr: "ROUNDS PRÉCÉDENTS", en: "PAST ROUNDS" },
 
   // ── HallOfHeroes ──
   "hall.memorial": { fr: "MÉMORIAL", en: "MEMORIAL" },

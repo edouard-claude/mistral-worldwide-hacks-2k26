@@ -260,6 +260,24 @@ export interface AgentNatsPayload {
   agent_name?: string;
   take?: string;
   phase?: number;
+  round?: number;
+  confidence?: number;
+  rankings?: Array<{ agent_id: string; score: number }>;
+  new_color?: number;
+}
+
+export interface AgentPhaseEntry {
+  phase: number;
+  content: string;
+  confidence?: number;
+  rankings?: Array<{ agent_id: string; score: number }>;
+  new_color?: number;
+  timestamp: number;
+}
+
+export interface AgentRoundHistory {
+  round: number;
+  phases: Record<number, AgentPhaseEntry>;  // key = 1,2,3,4
 }
 
 // ============================================================================

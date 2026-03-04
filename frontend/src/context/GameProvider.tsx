@@ -449,6 +449,10 @@ function dispatchWsEvent(
             agent_name: data.agent_name || agentId,
             take: data.content || data.take || data.message || "",
             phase: data.phase,
+            round: data.round,
+            confidence: data.confidence,
+            rankings: data.rankings,
+            new_color: data.new_color,
           },
         });
         break;
@@ -474,6 +478,10 @@ function dispatchWsEvent(
             agent_name: data.agent_name || agentId,
             take: data.content || data.take || data.message || "",
             phase: data.phase,
+            round: data.round,
+            confidence: data.confidence,
+            rankings: data.rankings,
+            new_color: data.new_color,
           },
         });
         break;

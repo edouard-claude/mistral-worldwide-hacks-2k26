@@ -1,11 +1,16 @@
+import { useState } from "react";
 import { createPortal } from "react-dom";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import type { Agent } from "@/data/gameData";
+import type { AgentRoundHistory } from "@/types/ws-events";
+import { useGame } from "@/hooks/useGame";
+import { useLang } from "@/i18n/LanguageContext";
+import { tr } from "@/i18n/translations";
+import { renderMarkdown } from "@/utils/terminalMarkdown";
 import agentKgb from "@/assets/agent_kgb.png";
 import agentSabot from "@/assets/agent_sabot.png";
 import agentPropa from "@/assets/agent_propa.png";
 import agentMoustache from "@/assets/agent_moustache.png";
-import { useLang } from "@/i18n/LanguageContext";
-import { tr } from "@/i18n/translations";
 
 const avatarMap: Record<string, string> = {
   ag1: agentKgb, ag2: agentSabot, ag3: agentPropa, ag4: agentMoustache,
@@ -91,6 +96,161 @@ function getPersonality(agent: Agent, lang: string) {
   return clonePersonality[lang] || clonePersonality["fr"];
 }
 
+// Phase config: icon, color, label key
+const PHASE_CONFIG: Record<number, { icon: string; color: string; labelKey: string }> = {
+  1: { icon: "\u{1F9E0}", color: "hsl(133, 100%, 30%)", labelKey: "agent.phase1" },    // brain
+  2: { icon: "\u{1F4E2}", color: "hsl(48, 100%, 40%)", labelKey: "agent.phase2" },     // megaphone
+  3: { icon: "\u{1F504}", color: "hsl(30, 41%, 55%)", labelKey: "agent.phase3" },       // arrows
+  4: { icon: "\u{1F5F3}\uFE0F", color: "hsl(0, 100%, 40%)", labelKey: "agent.phase4" }, // ballot box
+};
+
+function ConfidenceBar({ value, max = 5 }: { value: number; max?: number }) {
+  const filled = Math.round(value);
+  return (
+    <span className="inline-flex items-center gap-0.5 ml-1">
+      {Array.from({ length: max }, (_, i) => (
+        <span key={i} className={`inline-block w-1.5 h-3 ${i < filled ? "bg-comic-yellow" : "bg-foreground/15"}`} />
+      ))}
+      <span className="text-[9px] ml-1 text-secondary/70">{value}/{max}</span>
+    </span>
+  );
+}
+
+function PhaseBlock({
+  phaseNum,
+  entry,
+  pending,
+  agentNames,
+  lang,
+}: {
+  phaseNum: number;
+  entry?: { content: string; confidence?: number; rankings?: Array<{ agent_id: string; score: number }>; new_color?: number };
+  pending: boolean;
+  agentNames: Record<string, string>;
+  lang: "fr" | "en";
+}) {
+  const config = PHASE_CONFIG[phaseNum];
+  if (!config) return null;
+
+  return (
+    <div
+      className={`border-l-3 pl-3 py-2 my-1.5 transition-opacity duration-300 ${pending ? "opacity-30" : ""}`}
+      style={{ borderColor: config.color }}
+    >
+      <div className="flex items-center gap-1.5 mb-1">
+        <span className="text-sm">{config.icon}</span>
+        <span
+          className="text-[9px] px-1.5 py-0.5 border font-heading tracking-wider font-bold"
+          style={{ borderColor: config.color, color: config.color }}
+        >
+          {tr(config.labelKey as any, lang)}
+        </span>
+        {entry?.confidence !== undefined && (
+          <span className="text-[9px] text-secondary/60 ml-auto flex items-center gap-1">
+            {tr("agent.confidence", lang)}:
+            <ConfidenceBar value={entry.confidence} />
+          </span>
+        )}
+      </div>
+
+      {pending ? (
+        <div className="flex items-center gap-1.5 text-secondary/40 text-[10px] italic">
+          <span className="inline-block w-1.5 h-3 bg-secondary/30" style={{ animation: "typewriter-cursor 0.8s step-end infinite" }} />
+          ...
+        </div>
+      ) : entry ? (
+        <div className="text-foreground/80 text-[11px] leading-relaxed">
+          {phaseNum === 3 && (
+            <span className="text-[8px] px-1 py-px border border-secondary/30 bg-secondary/10 text-secondary font-heading tracking-wider mr-1.5">
+              REVISED
+            </span>
+          )}
+          {phaseNum === 4 && entry.rankings ? (
+            <div className="space-y-1">
+              <div className="flex gap-2 flex-wrap">
+                {entry.rankings
+                  .sort((a, b) => b.score - a.score)
+                  .map((r, i) => (
+                    <span key={r.agent_id} className="text-[10px]">
+                      <span className="font-bold text-comic-yellow">#{i + 1}</span>{" "}
+                      <span className="text-foreground/80">{agentNames[r.agent_id] || r.agent_id}</span>
+                      <span className="text-secondary/50 ml-0.5">({r.score})</span>
+                    </span>
+                  ))}
+              </div>
+              {entry.new_color !== undefined && (
+                <div className="text-[9px] text-secondary/60 mt-1">
+                  {tr("agent.politicalShift", lang)}: <span className="font-bold text-foreground/70">{entry.new_color.toFixed(2)}</span>
+                </div>
+              )}
+              {entry.content && (
+                <div className="mt-1">{renderMarkdown(entry.content)}</div>
+              )}
+            </div>
+          ) : (
+            renderMarkdown(entry.content)
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function RoundBlock({
+  roundHistory,
+  isCurrent,
+  agentNames,
+  lang,
+}: {
+  roundHistory: AgentRoundHistory;
+  isCurrent: boolean;
+  agentNames: Record<string, string>;
+  lang: "fr" | "en";
+}) {
+  const [open, setOpen] = useState(isCurrent);
+
+  return (
+    <div className={`${isCurrent ? "" : "mt-1"}`}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 w-full text-left py-1.5 hover:opacity-80 transition-opacity"
+      >
+        {open ? <ChevronDown size={14} className="text-soviet-red/60" /> : <ChevronRight size={14} className="text-soviet-red/60" />}
+        <span className="text-[10px] font-heading tracking-widest text-soviet-red/80 font-bold">
+          {isCurrent ? tr("agent.currentRound", lang) : tr("agent.round", lang)} {roundHistory.round}
+        </span>
+        <span className="text-[8px] text-secondary/40 ml-auto">
+          {Object.keys(roundHistory.phases).length}/4
+        </span>
+      </button>
+
+      {open && (
+        <div className="ml-1">
+          {[1, 2, 3, 4].map(phaseNum => {
+            const entry = roundHistory.phases[phaseNum];
+            const pending = isCurrent && !entry;
+            // Only show pending indicator for phases that haven't arrived yet
+            // but are expected (i.e., a previous phase exists for this round)
+            const hasAnyPhase = Object.keys(roundHistory.phases).length > 0;
+            if (!entry && !pending) return null;
+            if (!entry && !hasAnyPhase) return null;
+            return (
+              <PhaseBlock
+                key={phaseNum}
+                phaseNum={phaseNum}
+                entry={entry}
+                pending={pending && hasAnyPhase}
+                agentNames={agentNames}
+                lang={lang}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface AgentDetailModalProps {
   agent: Agent;
   rank?: number;
@@ -99,21 +259,36 @@ interface AgentDetailModalProps {
 
 const AgentDetailModal = ({ agent, rank, onClose }: AgentDetailModalProps) => {
   const lang = useLang();
+  const { state } = useGame();
   const personality = getPersonality(agent, lang);
   const isClone = agent.id.startsWith("clone_");
 
-  const dangerLevelKey = agent.health < 30 ? "agent.critical" : agent.health < 50 ? "agent.high" : agent.health < 75 ? "agent.moderate" : "agent.low";
-  const dangerLevel = tr(dangerLevelKey as any, lang);
-  const dangerColor = agent.health < 30 ? "hsl(var(--red-soviet))" : agent.health < 50 ? "hsl(var(--comic-yellow))" : agent.health < 75 ? "hsl(var(--ocre-dark))" : "hsl(var(--matrix-green))";
+  // Get debate history for this agent
+  const agentRounds = state.agentHistory[agent.id] || [];
+  const hasHistory = agentRounds.length > 0;
+  const currentTurn = state.gameState.turn;
+
+  // Sort rounds: current first, then descending
+  const sortedRounds = [...agentRounds].sort((a, b) => b.round - a.round);
+
+  // Build agent name lookup for rankings display
+  const agentNames: Record<string, string> = {};
+  for (const a of state.liveAgents) {
+    agentNames[a.id] = a.name;
+  }
+  for (const f of state.fallenAgents) {
+    agentNames[f.agent.id] = f.agent.name;
+  }
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
       onClick={onClose} style={{ animation: "fade-in-up 0.3s ease-out" }}>
-      <div className="max-w-2xl w-full mx-4 border-6 border-foreground bg-card text-card-foreground"
+      <div className="max-w-2xl w-full mx-4 border-6 border-foreground bg-card text-card-foreground max-h-[85vh] flex flex-col"
         onClick={e => e.stopPropagation()}
         style={{ boxShadow: "10px 10px 0px hsl(var(--black))", animation: "slam-in 0.4s ease-out" }}>
 
-        <div className="relative bg-soviet-black p-4 border-b-4 border-primary">
+        {/* HEADER */}
+        <div className="relative bg-soviet-black p-4 border-b-4 border-primary shrink-0">
           <div className="flex gap-4 items-center">
             <img src={getAvatar(agent)} alt={agent.name}
               className="w-20 h-20 object-cover border-4 border-foreground"
@@ -137,50 +312,73 @@ const AgentDetailModal = ({ agent, rank, onClose }: AgentDetailModalProps) => {
           </button>
         </div>
 
-        <div className="p-5 space-y-4" style={{ fontFamily: "'Courier New', Courier, monospace" }}>
-          <div>
-            <h3 className="font-heading text-xs tracking-widest text-muted-foreground mb-1">{tr("agent.biography", lang)}</h3>
-            <p className="text-sm italic leading-relaxed">{personality.bio}</p>
-          </div>
+        {/* SCROLLABLE BODY */}
+        <div className="overflow-y-auto flex-1 p-5 space-y-4" style={{ fontFamily: "'Courier New', Courier, monospace" }}>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div className="border-2 border-foreground/20 p-2.5" style={{ boxShadow: "3px 3px 0px hsl(var(--black) / 0.2)" }}>
-              <div className="font-heading text-[10px] tracking-widest text-comic-yellow">{tr("agent.trait", lang)}</div>
-              <p className="text-xs mt-1">{personality.trait}</p>
-            </div>
-            <div className="border-2 border-foreground/20 p-2.5" style={{ boxShadow: "3px 3px 0px hsl(var(--black) / 0.2)" }}>
-              <div className="font-heading text-[10px] tracking-widest text-primary">{tr("agent.weakness", lang)}</div>
-              <p className="text-xs mt-1">{personality.weakness}</p>
-            </div>
-          </div>
-
+          {/* STATS */}
           <div>
-            <h3 className="font-heading text-xs tracking-widest text-muted-foreground mb-2">{tr("agent.stats", lang)}</h3>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {[
-                { label: tr("agent.life", lang), value: agent.health, color: "hsl(var(--red-soviet))" },
-                { label: tr("agent.conviction", lang), value: agent.conviction, color: "hsl(var(--ocre-dark))" },
-                { label: tr("agent.selfishness", lang), value: agent.selfishness, color: "hsl(48, 100%, 40%)" },
+                { label: tr("agent.confidence", lang), value: agent.health, max: 100, color: "hsl(var(--red-soviet))" },
+                { label: tr("agent.conviction", lang), value: agent.conviction, max: 100, color: "hsl(var(--ocre-dark))" },
+                { label: tr("agent.selfishness", lang), value: agent.selfishness, max: 100, color: "hsl(48, 100%, 40%)" },
               ].map(stat => (
                 <div key={stat.label} className="flex items-center gap-2">
-                  <span className="text-xs w-24 shrink-0 font-heading font-bold">{stat.label}</span>
-                  <div className="flex-1 h-3.5 bg-foreground/10 border border-foreground/20">
+                  <span className="text-[10px] w-20 shrink-0 font-heading font-bold">{stat.label}</span>
+                  <div className="flex-1 h-3 bg-foreground/10 border border-foreground/20">
                     <div className="h-full transition-all duration-700" style={{ width: `${stat.value}%`, backgroundColor: stat.color }} />
                   </div>
-                  <span className="text-xs w-8 text-right font-bold">{stat.value}</span>
+                  <span className="text-[10px] w-8 text-right font-bold">{stat.value}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="flex items-center justify-between border-t-2 border-foreground/10 pt-3">
-            <span className="font-heading text-xs tracking-widest text-muted-foreground">{tr("agent.dangerLevel", lang)}</span>
-            <span className="font-comic text-base px-3 py-1 border-2" style={{ color: dangerColor, borderColor: dangerColor }}>
-              {dangerLevel}
-            </span>
-          </div>
+          {/* DEBATE HISTORY */}
+          {hasHistory ? (
+            <div className="border-t-2 border-foreground/10 pt-3">
+              <h3 className="font-heading text-xs tracking-widest text-muted-foreground mb-2">
+                {tr("agent.debateHistory", lang)}
+              </h3>
+              {sortedRounds.map(roundH => (
+                <RoundBlock
+                  key={roundH.round}
+                  roundHistory={roundH}
+                  isCurrent={roundH.round === currentTurn}
+                  agentNames={agentNames}
+                  lang={lang}
+                />
+              ))}
+            </div>
+          ) : (
+            /* FALLBACK: hardcoded bio */
+            <div className="border-t-2 border-foreground/10 pt-3">
+              <div className="mb-3">
+                <h3 className="font-heading text-xs tracking-widest text-muted-foreground mb-1">{tr("agent.biography", lang)}</h3>
+                <p className="text-sm italic leading-relaxed">{personality.bio}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="border-2 border-foreground/20 p-2.5" style={{ boxShadow: "3px 3px 0px hsl(var(--black) / 0.2)" }}>
+                  <div className="font-heading text-[10px] tracking-widest text-comic-yellow">{tr("agent.trait", lang)}</div>
+                  <p className="text-xs mt-1">{personality.trait}</p>
+                </div>
+                <div className="border-2 border-foreground/20 p-2.5" style={{ boxShadow: "3px 3px 0px hsl(var(--black) / 0.2)" }}>
+                  <div className="font-heading text-[10px] tracking-widest text-primary">{tr("agent.weakness", lang)}</div>
+                  <p className="text-xs mt-1">{personality.weakness}</p>
+                </div>
+              </div>
+              <div className="text-[10px] text-secondary/40 italic mt-3 text-center">
+                {tr("agent.noHistory", lang)}
+              </div>
+            </div>
+          )}
 
-          <div className="speech-bubble text-sm">« {agent.opinion} »</div>
+          {/* CURRENT OPINION */}
+          {agent.opinion && (
+            <div className="speech-bubble text-[11px]">
+              « {agent.opinion} »
+            </div>
+          )}
         </div>
       </div>
     </div>,

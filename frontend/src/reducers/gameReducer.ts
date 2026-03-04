@@ -20,6 +20,7 @@ import type {
   BackendAgent,
   BackendIndices,
   SwarmAgent,
+  AgentRoundHistory,
 } from "@/types/ws-events";
 
 // ============================================================================
@@ -48,6 +49,9 @@ export interface FullGameState {
 
   // Debate
   debateLines: DebateLine[];
+
+  // Agent debate history (persists across turns)
+  agentHistory: Record<string, AgentRoundHistory[]>;
 
   // Turn
   turnPhase: TurnPhase;
@@ -111,6 +115,9 @@ export const initialGameState: FullGameState = {
 
   // Debate
   debateLines: [],
+
+  // Agent debate history
+  agentHistory: {},
 
   // Turn
   turnPhase: "loading",
@@ -648,6 +655,7 @@ export function gameReducer(state: FullGameState, action: GameAction): FullGameS
     case "AGENT_NATS": {
       // Use agent_name from payload (from swarm AgentMessage), fallback to agent_id
       const agentName = action.payload.agent_name || action.payload.agent_id || "AGENT";
+      const agentId = action.payload.agent_id || action.payload.agent_name || "unknown";
       const message = action.payload.take || "...";
 
       // Determine line type based on phase
@@ -671,10 +679,42 @@ export function gameReducer(state: FullGameState, action: GameAction): FullGameS
         return a;
       });
 
+      // Store in agentHistory (per agent, per round, per phase)
+      const round = action.payload.round ?? state.gameState.turn;
+      const newHistory = { ...state.agentHistory };
+      if (!newHistory[agentId]) {
+        newHistory[agentId] = [];
+      } else {
+        newHistory[agentId] = [...newHistory[agentId]];
+      }
+
+      let roundEntry = newHistory[agentId].find(r => r.round === round);
+      if (!roundEntry) {
+        roundEntry = { round, phases: {} };
+        newHistory[agentId] = [...newHistory[agentId], roundEntry];
+      } else {
+        // Clone to avoid mutation
+        const idx = newHistory[agentId].indexOf(roundEntry);
+        roundEntry = { ...roundEntry, phases: { ...roundEntry.phases } };
+        newHistory[agentId][idx] = roundEntry;
+      }
+
+      if (phase !== undefined) {
+        roundEntry.phases[phase] = {
+          phase,
+          content: message,
+          confidence: action.payload.confidence,
+          rankings: action.payload.rankings,
+          new_color: action.payload.new_color,
+          timestamp: Date.now(),
+        };
+      }
+
       return {
         ...state,
         liveAgents: updatedAgents,
         debateLines: [...state.debateLines, newLine],
+        agentHistory: newHistory,
         loading: { ...state.loading, debate: false },
       };
     }
@@ -731,6 +771,7 @@ export function gameReducer(state: FullGameState, action: GameAction): FullGameS
 
     case "TRIGGER_NEXT_TURN":
       // Note: needsPropose stays false here — the UI action sets it via separate dispatch
+      // agentHistory persists across turns (spread from state)
       return {
         ...state,
         turnTransition: false,
