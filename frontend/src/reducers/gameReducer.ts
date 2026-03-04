@@ -484,7 +484,6 @@ export function gameReducer(state: FullGameState, action: GameAction): FullGameS
         },
         turnPhase: "results",
         turnTransition: true,
-        needsPropose: true,
       };
 
     case "GM_INDICES": {

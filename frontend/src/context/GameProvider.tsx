@@ -68,6 +68,25 @@ export function GameProvider({ children }: GameProviderProps) {
 
           // Map WebSocket events to reducer actions
           dispatchWsEvent(eventType, data, dispatch);
+
+          // Auto-transition: when GM broadcasts turn_update, auto-dismiss modal
+          // and trigger next propose after a short delay (let user see results)
+          if (eventType === "turn_update" || eventType === "gm.turn_update") {
+            const sid = sessionIdRef.current;
+            const lang = langRef.current;
+            console.log("[WS] turn_update → auto-propose in 3s", { sid, lang, turn: data.turn });
+            setTimeout(() => {
+              dispatch({ type: "TRIGGER_NEXT_TURN" });
+              if (sid) {
+                const turnText = `══ ${tr("engine.tour", lang)} ${data.turn} — ${tr("engine.propose", lang)} ══`;
+                dispatch({ type: "ADD_TERMINAL_LINE", line: { type: "separator", text: turnText } });
+                triggerPropose(sid, lang).catch((err) => {
+                  console.error("[API] Auto-propose error:", err);
+                  dispatch({ type: "GM_ERROR", payload: { message: err.message } });
+                });
+              }
+            }, 3000);
+          }
         } catch (err) {
           console.error("[WS] Parse error:", err, event.data);
         }
@@ -125,24 +144,17 @@ export function GameProvider({ children }: GameProviderProps) {
   }, []);
 
   // ========================================================================
-  // Handle needsPropose flag
+  // Handle needsPropose flag (initial game start only)
+  // Turn-to-turn auto-propose is handled directly in the WS onmessage handler
   // ========================================================================
 
   useEffect(() => {
     if (state.needsPropose && state.sessionId && state.wsStatus === "connected") {
-      // Clear the flag FIRST to prevent re-triggers
       dispatch({ type: "CLEAR_NEEDS_PROPOSE" });
 
-      // Transition UI: clear modal, reset to "proposing" phase
-      if (state.turnTransition) {
-        dispatch({ type: "TRIGGER_NEXT_TURN" });
-      }
-
-      // Add separator line
       const turnText = `══ ${tr("engine.tour", langRef.current)} ${state.gameState.turn} — ${tr("engine.propose", langRef.current)} ══`;
       dispatch({ type: "ADD_TERMINAL_LINE", line: { type: "separator", text: turnText } });
 
-      // Trigger propose via REST (returns 202, events come via WS)
       triggerPropose(state.sessionId, langRef.current).catch((err) => {
         console.error("[API] Propose error:", err);
         dispatch({ type: "GM_ERROR", payload: { message: err.message } });
