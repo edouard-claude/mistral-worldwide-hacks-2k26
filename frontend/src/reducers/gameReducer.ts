@@ -744,6 +744,9 @@ export function gameReducer(state: FullGameState, action: GameAction): FullGameS
         selected: m.id === action.missionId,
       }));
 
+      // Credulity bonus: player followed GM's secret recommendation
+      const credulityBonus = mission.recommended ? 3 : 0;
+
       return {
         ...state,
         missions: updatedMissions,
@@ -752,6 +755,10 @@ export function gameReducer(state: FullGameState, action: GameAction): FullGameS
         debateLines: [],
         isStreaming: true,
         loading: { ...state.loading, debate: true },
+        gameState: credulityBonus > 0 ? {
+          ...state.gameState,
+          creduliteIndex: Math.min(100, state.gameState.creduliteIndex + credulityBonus),
+        } : state.gameState,
       };
     }
 

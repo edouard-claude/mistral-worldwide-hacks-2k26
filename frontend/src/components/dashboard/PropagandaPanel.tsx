@@ -188,12 +188,6 @@ function NewsCard({ mission: m, index, canSelect, isDisabled, loading, lang, onS
             {tr("propa.inProgress", lang)}
           </div>
         )}
-        {m.recommended && !m.inProgress && (
-          <div className="absolute top-1 left-1 bg-soviet-red text-foreground text-[8px] font-heading px-1.5 py-0.5 tracking-wider"
-            style={{ animation: 'stamp-appear 0.4s ease-out', boxShadow: '2px 2px 0px hsl(var(--black))' }}>
-            ★ {lang === "fr" ? "CONSEILLÉ PAR LE POLITBURO" : "RECOMMENDED BY THE POLITBURO"}
-          </div>
-        )}
       </div>
 
       <div className="p-2">

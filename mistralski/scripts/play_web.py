@@ -36,8 +36,8 @@ from src.models.world import GlobalIndices, NewsKind
 
 # ── wh26 backend state ───────────────────────────────────────────
 
-WH26_BASE_URL = os.environ.get("WH26_BASE_URL", "http://wh26-backend.wh26.edouard.cl")
-WH26_WS_URL = os.environ.get("WH26_WS_URL", "ws://wh26-backend.wh26.edouard.cl")
+WH26_BASE_URL = os.environ.get("WH26_BASE_URL", "https://wh26-backend.wh26.edouard.cl")
+WH26_WS_URL = os.environ.get("WH26_WS_URL", "wss://wh26-backend.wh26.edouard.cl")
 
 arena_session_id: str | None = None  # Set per game by /api/start
 wh26_ws: websockets.ClientConnection | None = None
