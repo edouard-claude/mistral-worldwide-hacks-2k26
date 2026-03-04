@@ -151,10 +151,10 @@ const CenterPanel = ({ visibleLines, activeDebateIndex, gmTerminal }: CenterPane
         <div ref={debateScrollRef} className="flex-1 min-h-0 overflow-y-auto">
           {gmTerminal}
 
-          <div className="p-3 space-y-2 font-mono text-[11px]">
+          <div className="p-3 space-y-3">
             {turnPhase === "select_news" && debateLines.length === 0 && !isGmPhase && (
-              <div className="text-center py-1">
-                <span className="text-[9px] font-heading text-soviet-red/30 tracking-[0.1em]">{tr("center.selectNewsPrompt", lang)}</span>
+              <div className="text-center py-2">
+                <span className="text-[10px] font-heading text-soviet-red/30 tracking-[0.15em]">{tr("center.selectNewsPrompt", lang)}</span>
               </div>
             )}
 
@@ -167,61 +167,72 @@ const CenterPanel = ({ visibleLines, activeDebateIndex, gmTerminal }: CenterPane
               return (
                 <div
                   key={i}
-                  className={`flex gap-2 transition-all duration-300 ${isActive ? 'translate-x-1' : ''} ${
+                  className={`border-l-3 pl-3 py-1.5 transition-all duration-300 ${isActive ? 'translate-x-1' : ''} ${
                     isSystem ? 'animate-slam-in' : ''
-                  } ${isMistralski ? 'border-l-2 pl-2' : ''}`}
+                  }`}
                   style={{
-                    borderColor: isMistralski ? "hsl(var(--red-soviet))" : agentColor ? agentColor.hsl : undefined,
-                    borderLeftWidth: agentColor ? "2px" : undefined,
-                    paddingLeft: agentColor ? "8px" : undefined,
+                    borderColor: isMistralski ? "hsl(var(--red-soviet))" : isSystem ? "hsl(var(--red-soviet) / 0.5)" : agentColor ? agentColor.hsl : "hsl(var(--foreground) / 0.15)",
+                    background: isMistralski ? "linear-gradient(90deg, hsl(0 100% 40% / 0.05), transparent)"
+                      : isSystem ? "linear-gradient(90deg, hsl(0 100% 40% / 0.03), transparent)"
+                      : agentColor ? `linear-gradient(90deg, ${agentColor.hsl.replace(')', ' / 0.06)')}, transparent)`
+                      : undefined,
                     animation: isSystem ? undefined
                       : line.type === "attack" ? 'debate-line-attack 0.5s ease-out both'
                       : line.type === "defense" ? 'debate-line-defense 0.4s ease-out both'
                       : 'fade-in-up 0.4s ease-out both',
                   }}
                 >
-                  <span className={`font-bold shrink-0 px-1.5 border-2 text-[10px] transition-all duration-300 ${
-                    isMistralski ? "border-soviet-red bg-soviet-red/20 text-soviet-red"
-                    : isSystem ? "border-soviet-red/60 bg-soviet-red/10 text-soviet-red/80"
-                    : ""
-                  } ${isActive ? 'scale-110' : ''}`}
-                    style={agentColor ? {
-                      borderColor: agentColor.hsl,
-                      backgroundColor: `${agentColor.hsl.replace(')', ' / 0.15)')}`,
-                      color: agentColor.hsl,
-                    } : undefined}
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className={`font-heading font-bold text-[11px] tracking-wider ${
+                      isMistralski ? "text-soviet-red"
+                      : isSystem ? "text-soviet-red/70"
+                      : ""
+                    }`}
+                      style={agentColor ? { color: agentColor.hsl } : undefined}
+                    >
+                      {isMistralski ? (
+                        <><img src={brainSoviet} alt="" className="inline-block w-4 h-4 mr-1 -mt-0.5" />MISTRALSKI</>
+                      ) : line.agent}
+                    </span>
+                    {!isSystem && !isMistralski && (
+                      <span className="text-[8px] px-1 py-px border font-heading tracking-wider"
+                        style={{
+                          borderColor: agentColor ? `${agentColor.hsl.replace(')', ' / 0.4)')}` : "hsl(var(--foreground) / 0.2)",
+                          color: agentColor ? `${agentColor.hsl.replace(')', ' / 0.6)')}` : "hsl(var(--foreground) / 0.4)",
+                        }}>
+                        {line.type === "attack" ? "ATTAQUE" : line.type === "defense" ? "DÉFENSE" : line.type === "reaction" ? "COGITATION" : "ARGUMENT"}
+                      </span>
+                    )}
+                  </div>
+                  <div className={`text-[13px] leading-relaxed ${
+                    isMistralski ? "text-foreground/90 italic font-heading"
+                    : isSystem ? "text-soviet-red/80 font-heading font-bold"
+                    : "text-foreground/85"
+                  }`}
+                    style={{ fontFamily: isMistralski || isSystem ? undefined : "'Courier New', Courier, monospace" }}
                   >
-                    {isMistralski ? "☭ MISTRALSKI" : line.agent}
-                  </span>
-                  <span className={`transition-all duration-300 ${
-                    isMistralski ? "text-soviet-red/90 font-bold italic"
-                    : isSystem ? "text-soviet-red/70 font-bold"
-                    : "text-foreground/80"
-                  } ${isActive ? 'font-bold' : ''}`}
-                    style={agentColor ? { color: `${agentColor.hsl.replace(')', ' / 0.85)')}` } : undefined}
-                  >
-                    {isMistralski ? <img src={brainSoviet} alt="" className="inline-block w-4 h-4 mr-1 -mt-0.5" /> : isSystem ? "⚠️ " : line.type === "attack" ? "⚔ " : line.type === "defense" ? "◆ " : "▸ "}
+                    {isSystem ? "⚠️ " : line.type === "attack" ? "⚔ " : line.type === "defense" ? "◆ " : ""}
                     {line.message}
-                  </span>
+                  </div>
                 </div>
               );
             })}
 
             {turnPhase === "debating" && (
-              <div className="flex items-center gap-1 text-soviet-red/40">
+              <div className="flex items-center gap-1.5 text-soviet-red/40 pl-3">
                 <span className="inline-block w-1.5 h-4 bg-soviet-red/50" style={{ animation: 'typewriter-cursor 0.8s step-end infinite' }} />
-                <span className="text-[9px] italic font-heading tracking-wider">
+                <span className="text-[10px] italic font-heading tracking-wider">
                   {isGmPhase ? tr("center.gmAnalyzing", lang) : tr("center.agentPreparing", lang)}
                 </span>
               </div>
             )}
 
             {turnPhase === "results" && turnResult && (
-              <div className="border-t-2 border-soviet-red/30 pt-2 mt-2 space-y-1">
-                <div className="text-soviet-red text-[10px] font-heading">
+              <div className="border-t-3 border-soviet-red/30 pt-3 mt-3 space-y-1.5 pl-3">
+                <div className="text-soviet-red text-[12px] font-heading font-bold">
                   {tr("center.turnResult", lang)} : {turnResult.winner.name} {tr("center.dominates", lang)} — {turnResult.loser.name} {tr("center.eliminated", lang)}
                 </div>
-                <div className="text-secondary/50 text-[9px]">
+                <div className="text-secondary/60 text-[10px] font-heading">
                   Chaos +{turnResult.chaosDelta} | {tr("propa.credulity", lang)} +{turnResult.creduliteDelta}
                 </div>
               </div>

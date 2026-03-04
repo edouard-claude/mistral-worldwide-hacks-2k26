@@ -2,7 +2,6 @@
 // Pure function that maps WS events and actions to state changes
 
 import type { Agent, DebateLine, GameState, NewsMission } from "@/data/gameData";
-import { politicalSpectrum as initialSpectrum } from "@/data/gameData";
 import type { ChaosEvent } from "@/data/chaosEvents";
 import { checkChaosEvent } from "@/data/chaosEvents";
 import type { Lang } from "@/i18n/translations";
@@ -58,8 +57,7 @@ export interface FullGameState {
   turnResult: TurnResult | null;
   turnTransition: boolean;
 
-  // Political spectrum (visual)
-  politicalSpectrum: { label: string; value: number; color: string }[];
+  // (politicalSpectrum removed — now derived from agent.politicalColor)
 
   // GM Terminal
   gmTerminalLines: GmTerminalLine[];
@@ -124,8 +122,6 @@ export const initialGameState: FullGameState = {
   turnResult: null,
   turnTransition: false,
 
-  // Political spectrum
-  politicalSpectrum: initialSpectrum.map(p => ({ ...p })),
 
   // GM Terminal
   gmTerminalLines: [],
@@ -211,6 +207,9 @@ function mapAgent(ba: BackendAgent): Agent {
     status: ba.status || (ba as any).status_text || (ba as any).personality || ba.name,
     alive: ba.alive !== false && !(ba as any).is_neutralized,
     opinion: ba.opinion || (ba as any).personality || "",
+    confidence: 3,
+    politicalColor: 0.5,
+    temperature: 0.5,
   };
 }
 
@@ -219,12 +218,17 @@ function mapSwarmAgent(sa: SwarmAgent): Agent {
     id: sa.id,
     name: sa.name,
     avatar: sa.avatar_url || "🤖",
-    health: clamp(sa.confidence * 20, 0, 100),          // 1-5 → 20-100, clamped
-    conviction: clamp(Math.round(sa.political_color * 100)),  // 0.0-1.0 → 0-100
-    selfishness: clamp(Math.round(sa.temperature * 100)),     // 0.0-1.0 → 0-100
+    health: clamp(sa.confidence * 20, 0, 100),
+    conviction: clamp(Math.round(sa.political_color * 100)),
+    selfishness: clamp(Math.round(sa.temperature * 100)),
     status: sa.parent_id ? "Clone" : sa.name,
     alive: sa.alive,
     opinion: "",
+    // Raw swarm values
+    confidence: sa.confidence,
+    politicalColor: sa.political_color,
+    temperature: sa.temperature,
+    parentId: sa.parent_id || undefined,
   };
 }
 
@@ -573,6 +577,9 @@ export function gameReducer(state: FullGameState, action: GameAction): FullGameS
           status: "ÉLIMINÉ",
           alive: false,
           opinion: "",
+          confidence: 0,
+          politicalColor: 0.5,
+          temperature: 0.5,
         },
         killedBy: action.payload.killer || "le collectif",
         turn: action.payload.round,
@@ -611,6 +618,10 @@ export function gameReducer(state: FullGameState, action: GameAction): FullGameS
         status: "Clone",
         alive: true,
         opinion: "",
+        confidence: parent?.confidence ?? 3,
+        politicalColor: parent?.politicalColor ?? 0.5,
+        temperature: parent?.temperature ?? 0.5,
+        parentId: action.payload.parent_id,
       };
 
       return {

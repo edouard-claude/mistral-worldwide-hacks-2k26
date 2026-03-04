@@ -11,6 +11,7 @@ import hallHeroesIcon from "@/assets/hall_heroes_icon.png";
 import { useLang } from "@/i18n/LanguageContext";
 import { tr } from "@/i18n/translations";
 import { AgentSkeletonGrid } from "@/components/skeletons/AgentSkeleton";
+import { getAgentColor } from "@/lib/agentColors";
 
 const avatarMap: Record<string, string> = {
   ag1: agentKgb, ag2: agentSabot, ag3: agentPropa, ag4: agentMoustache,
@@ -26,6 +27,43 @@ function getAvatar(agent: Agent): string {
   return portraits[agent.name.length % portraits.length];
 }
 
+/** Conviction blocks: 1-5 scale rendered as filled/empty blocks */
+function ConvictionBlocks({ value }: { value: number }) {
+  const filled = Math.max(1, Math.min(5, Math.round(value)));
+  return (
+    <span className="inline-flex items-center gap-px">
+      {Array.from({ length: 5 }, (_, i) => (
+        <span
+          key={i}
+          className={`inline-block w-2 h-3 border border-soviet-black/40 ${
+            i < filled ? "bg-comic-yellow" : "bg-soviet-black/10"
+          }`}
+        />
+      ))}
+    </span>
+  );
+}
+
+/** Temperature heat bar: 0.0 - 1.0 rendered as gradient bar */
+function TemperatureBar({ value }: { value: number }) {
+  const pct = Math.round(value * 100);
+  // Cold = blue-ish, hot = red
+  const hue = Math.round(240 - value * 240); // 240(blue) → 0(red)
+  return (
+    <div className="flex items-center gap-1 flex-1">
+      <div className="flex-1 h-2 bg-soviet-black/10 border border-soviet-black/30 overflow-hidden">
+        <div
+          className="h-full transition-all duration-700"
+          style={{
+            width: `${pct}%`,
+            background: `linear-gradient(90deg, hsl(${Math.min(hue + 40, 240)}, 70%, 50%), hsl(${hue}, 80%, 45%))`,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 const SwarmPanel = () => {
   const lang = useLang();
   const { state } = useGame();
@@ -34,7 +72,6 @@ const SwarmPanel = () => {
     debateLines,
     turnResult,
     turnPhase,
-    politicalSpectrum,
     fallenAgents,
     loading,
   } = state;
@@ -52,19 +89,14 @@ const SwarmPanel = () => {
     };
   }, [debateLines]);
 
-  // Sort agents by debate ranking when available, otherwise by conviction
+  // Sort agents by debate ranking when available, otherwise by confidence
   const sortedAgents = turnResult?.ranking
     ? [...agents].sort((a, b) => {
         const aIdx = turnResult.ranking.indexOf(a.id);
         const bIdx = turnResult.ranking.indexOf(b.id);
         return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx);
       })
-    : [...agents].sort((a, b) => {
-        // Default: sort by conviction (highest first), danger last
-        if (a.health < 30 && b.health >= 30) return 1;
-        if (b.health < 30 && a.health >= 30) return -1;
-        return b.conviction - a.conviction;
-      });
+    : [...agents].sort((a, b) => b.confidence - a.confidence);
 
   const getDefaultRank = (agent: Agent): number => {
     return sortedAgents.indexOf(agent) + 1;
@@ -134,33 +166,45 @@ const SwarmPanel = () => {
 
       <div className="p-3 overflow-y-auto flex-1 space-y-3 text-soviet-black">
 
-
-        {/* ÉCHIQUIER POLITIQUE */}
-        <div className="border-b-3 border-soviet-black/30 pb-2 mb-1">
-          <h3 className="font-comic text-center text-xs mb-1.5">{tr("swarm.chessboard", lang)}</h3>
-          <div className="space-y-1">
-            {politicalSpectrum.map((p) => {
-              const labelMap: Record<string, string> = {
-                "EXTRÊME GAUCHE": tr("swarm.farLeft", lang),
-                "GAUCHE": tr("swarm.left", lang),
-                "DROITE": tr("swarm.right", lang),
-                "EXTRÊME DROITE": tr("swarm.farRight", lang),
-              };
-              const displayLabel = labelMap[p.label] || p.label;
-              return (
-                <div key={p.label}>
-                  <div className="flex justify-between text-[8px] mb-0.5">
-                    <span className="font-heading font-bold">{displayLabel}</span>
-                    <span className="font-bold" style={{ color: p.color }}>{p.value}%</span>
-                  </div>
-                  <div className="h-1.5 bg-soviet-black/20 border border-soviet-black/40 w-full">
-                    <div className="h-full transition-all duration-700" style={{ width: `${p.value}%`, backgroundColor: p.color }} />
-                  </div>
-                </div>
-              );
-            })}
+        {/* SPECTRE POLITIQUE — Horizontal axis with agent markers */}
+        {agents.length > 0 && (
+          <div className="border-b-3 border-soviet-black/30 pb-2 mb-1">
+            <h3 className="font-comic text-center text-xs mb-2">{tr("swarm.spectrum", lang)}</h3>
+            <div className="relative px-2">
+              {/* Axis line */}
+              <div className="h-1 bg-gradient-to-r from-red-600 via-soviet-black/20 to-blue-700 border border-soviet-black/30" />
+              {/* Labels */}
+              <div className="flex justify-between text-[7px] font-heading font-bold mt-0.5 text-soviet-black/60">
+                <span>{tr("swarm.spectrumLeft", lang)}</span>
+                <span>{tr("swarm.spectrumRight", lang)}</span>
+              </div>
+              {/* Agent markers */}
+              <div className="relative h-5 mt-0.5">
+                {agents.map((agent) => {
+                  const pct = agent.politicalColor * 100; // 0=left, 1=right
+                  const color = getAgentColor(agent.name);
+                  return (
+                    <div
+                      key={agent.id}
+                      className="absolute -translate-x-1/2 transition-all duration-700 cursor-pointer group"
+                      style={{ left: `${pct}%`, top: 0 }}
+                      onClick={() => setSelectedAgent(agent)}
+                      title={agent.name}
+                    >
+                      <div
+                        className="w-3 h-3 border-2 border-soviet-black/80 transition-transform group-hover:scale-150"
+                        style={{ backgroundColor: color.hsl, borderRadius: agent.parentId ? "50%" : "0" }}
+                      />
+                      <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 text-[6px] font-heading font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
+                        {agent.name.split(" ")[0]}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
         {sortedAgents.map((agent, i) => {
           const isSpeaking = activeSpeaker === agent.name;
@@ -175,8 +219,8 @@ const SwarmPanel = () => {
               key={agent.id || `agent-${i}`}
               onClick={() => setSelectedAgent(agent)}
               className={`agent-card-ocre p-3 transition-all duration-300 cursor-pointer hover:brightness-110 ${
-                agent.health < 30 ? "border-soviet-red" : ""
-              } ${winner ? "border-comic-yellow animate-victory-glow" : ""} ${clone ? "border-soviet-matrix animate-clone-spawn" : ""} ${
+                winner ? "border-comic-yellow animate-victory-glow" : ""
+              } ${clone ? "border-soviet-matrix animate-clone-spawn" : ""} ${
                 loser ? "animate-death-flash" : ""
               } ${isSpeaking ? 'translate-x-[-2px] translate-y-[-2px]' : ''}`}
               style={{
@@ -243,36 +287,30 @@ const SwarmPanel = () => {
                       {tr("swarm.eliminatedLabel", lang)}
                     </span>
                   )}
-                  {agent.health < 30 && !loser && (
-                    <span className="inline-block mt-1 text-[9px] bg-soviet-black text-soviet-red px-1.5 py-0.5 font-bold font-heading opacity-90"
-                      style={{ animation: 'pulse-glow 2.5s ease-in-out infinite' }}>
-                      {tr("swarm.danger", lang)}
-                    </span>
-                  )}
                 </div>
               </div>
 
+              {/* STATS: Conviction (blocks 1-5) + Temperature (heat bar) */}
               <div className="space-y-1">
-                {[
-                  { label: tr("swarm.life", lang), value: agent.health, color: "hsl(var(--red-soviet))" },
-                  { label: tr("swarm.conviction", lang), value: agent.conviction, color: "hsl(var(--ocre-dark))" },
-                  { label: tr("swarm.selfishness", lang), value: agent.selfishness, color: "hsl(48, 100%, 40%)" },
-                ].map(stat => (
-                  <div key={stat.label} className="flex items-center gap-1">
-                    <span className="text-[8px] w-10 shrink-0 font-heading font-bold">{stat.label}</span>
-                    <div className="flex-1 h-2.5 bg-soviet-black/20 border border-soviet-black/40">
-                      <div className="h-full transition-all duration-700" style={{ width: `${stat.value}%`, backgroundColor: stat.color }} />
-                    </div>
-                    <span className="text-[9px] w-6 text-right font-bold">{stat.value}</span>
-                  </div>
-                ))}
+                <div className="flex items-center gap-1">
+                  <span className="text-[8px] w-10 shrink-0 font-heading font-bold">{tr("swarm.conviction", lang)}</span>
+                  <ConvictionBlocks value={agent.confidence} />
+                  <span className="text-[9px] ml-auto font-bold">{agent.confidence}/5</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[8px] w-10 shrink-0 font-heading font-bold">{tr("swarm.temperature", lang)}</span>
+                  <TemperatureBar value={agent.temperature} />
+                  <span className="text-[9px] w-8 text-right font-bold">{(agent.temperature * 100).toFixed(0)}%</span>
+                </div>
               </div>
 
-              <div className={`mt-2 speech-bubble text-[9px] transition-all duration-300 ${
-                isSpeaking ? 'scale-105 origin-left' : ''
-              }`}>
-                « {agent.opinion} »
-              </div>
+              {agent.opinion && (
+                <div className={`mt-2 speech-bubble text-[9px] transition-all duration-300 ${
+                  isSpeaking ? 'scale-105 origin-left' : ''
+                }`}>
+                  « {agent.opinion} »
+                </div>
+              )}
             </div>
           );
         })}

@@ -23,6 +23,11 @@ export interface Agent {
   status: string;
   alive: boolean;
   opinion: string; // their current stance on selected news
+  // Raw swarm values (preserved for display)
+  confidence: number;      // 1-5, conviction in fake news
+  politicalColor: number;  // 0.0-1.0, political position
+  temperature: number;     // 0.0-1.0, LLM temperature / volatility
+  parentId?: string;       // set if clone
 }
 
 export interface DebateLine {
@@ -184,12 +189,7 @@ export const newsMissions: NewsMission[] = generateMissions(3).missions;
 
 // Note: Agents and debateLines now come from WebSocket, no hardcoded data
 
-export const politicalSpectrum = [
-  { label: "EXTRÊME GAUCHE", value: 85, color: "hsl(0, 100%, 40%)" },
-  { label: "GAUCHE", value: 60, color: "hsl(20, 80%, 45%)" },
-  { label: "DROITE", value: 55, color: "hsl(210, 50%, 45%)" },
-  { label: "EXTRÊME DROITE", value: 70, color: "hsl(0, 60%, 30%)" },
-];
+// Political spectrum removed — now derived dynamically from agent.politicalColor
 
 export const tickerHeadlines = [
   "GAME OF CLAW NEWS — LE GOUVERNEMENT CONFIRME QUE LA TERRE EST PLATE...",

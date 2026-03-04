@@ -316,21 +316,44 @@ const AgentDetailModal = ({ agent, rank, onClose }: AgentDetailModalProps) => {
         <div className="overflow-y-auto flex-1 p-5 space-y-4" style={{ fontFamily: "'Courier New', Courier, monospace" }}>
 
           {/* STATS */}
-          <div>
-            <div className="space-y-1.5">
-              {[
-                { label: tr("agent.confidence", lang), value: agent.health, max: 100, color: "hsl(var(--red-soviet))" },
-                { label: tr("agent.conviction", lang), value: agent.conviction, max: 100, color: "hsl(var(--ocre-dark))" },
-                { label: tr("agent.selfishness", lang), value: agent.selfishness, max: 100, color: "hsl(48, 100%, 40%)" },
-              ].map(stat => (
-                <div key={stat.label} className="flex items-center gap-2">
-                  <span className="text-[10px] w-20 shrink-0 font-heading font-bold">{stat.label}</span>
-                  <div className="flex-1 h-3 bg-foreground/10 border border-foreground/20">
-                    <div className="h-full transition-all duration-700" style={{ width: `${stat.value}%`, backgroundColor: stat.color }} />
-                  </div>
-                  <span className="text-[10px] w-8 text-right font-bold">{stat.value}</span>
-                </div>
-              ))}
+          <div className="space-y-2">
+            {/* Conviction: 1-5 blocks */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] w-24 shrink-0 font-heading font-bold">{tr("agent.confidence", lang)}</span>
+              <span className="inline-flex items-center gap-0.5">
+                {Array.from({ length: 5 }, (_, i) => (
+                  <span key={i} className={`inline-block w-3 h-4 border border-foreground/30 ${
+                    i < Math.round(agent.confidence) ? "bg-comic-yellow" : "bg-foreground/10"
+                  }`} />
+                ))}
+              </span>
+              <span className="text-[11px] ml-1 font-bold">{agent.confidence}/5</span>
+            </div>
+            {/* Political position: marker on axis */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] w-24 shrink-0 font-heading font-bold">{tr("agent.politicalShift", lang)}</span>
+              <div className="flex-1 relative h-3 border border-foreground/20 overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-r from-red-600/30 via-foreground/5 to-blue-700/30" />
+                <div
+                  className="absolute top-0 w-1 h-full bg-comic-yellow border-x border-foreground/50 transition-all duration-700"
+                  style={{ left: `${agent.politicalColor * 100}%` }}
+                />
+              </div>
+              <span className="text-[11px] w-10 text-right font-bold">{agent.politicalColor.toFixed(2)}</span>
+            </div>
+            {/* Temperature: heat bar */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] w-24 shrink-0 font-heading font-bold">{tr("swarm.temperature", lang)}</span>
+              <div className="flex-1 h-3 border border-foreground/20 overflow-hidden">
+                <div
+                  className="h-full transition-all duration-700"
+                  style={{
+                    width: `${agent.temperature * 100}%`,
+                    background: `linear-gradient(90deg, hsl(240, 70%, 50%), hsl(${Math.round(240 - agent.temperature * 240)}, 80%, 45%))`,
+                  }}
+                />
+              </div>
+              <span className="text-[11px] w-10 text-right font-bold">{(agent.temperature * 100).toFixed(0)}%</span>
             </div>
           </div>
 
