@@ -176,7 +176,12 @@ export function GameProvider({ children }: GameProviderProps) {
 
     try {
       // 1. Generate a new session UUID
-      const sessionId = crypto.randomUUID();
+      const sessionId = typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+            const r = (Math.random() * 16) | 0;
+            return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+          });
       console.log("[API] Generated session:", sessionId);
 
       // 2. Initialize session with relay (triggers NATS arena.init for swarm)

@@ -150,15 +150,9 @@ func SaveGlobalState(session *Session) error {
 		return fmt.Errorf("failed to marshal global state: %w", err)
 	}
 
-	// F4: Atomic write via temp file + rename
-	tmpPath := filepath.Join(session.Dir, "global.json.tmp")
+	// Write directly (atomic rename fails on WSL/NTFS)
 	finalPath := filepath.Join(session.Dir, "global.json")
-
-	if err := WriteFile(tmpPath, string(data)); err != nil {
-		return err
-	}
-
-	return os.Rename(tmpPath, finalPath)
+	return WriteFile(finalPath, string(data))
 }
 
 // InjectContext updates agent files with current session state
