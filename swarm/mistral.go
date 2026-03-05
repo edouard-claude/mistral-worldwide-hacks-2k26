@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -15,6 +16,7 @@ import (
 type MistralClient struct {
 	apiKey     string
 	baseURL    string
+	model      string
 	httpClient *http.Client
 	timeout    time.Duration
 }
@@ -49,13 +51,35 @@ func NewMistralClient(timeout time.Duration) (*MistralClient, error) {
 	if baseURL == "" {
 		return nil, fmt.Errorf("MISTRAL_URL environment variable is required")
 	}
+	// Auto-append /v1/chat/completions if MISTRAL_URL is just a base URL
+	if !strings.Contains(baseURL, "/chat/completions") {
+		baseURL = strings.TrimRight(baseURL, "/") + "/v1/chat/completions"
+	}
 
 	// API key is optional - if set, it will be used in Authorization header
 	apiKey := os.Getenv("MISTRAL_API_KEY")
 
+	// Model name: defaults to "mistral-small-latest" (Mistral API)
+	// For vLLM, set MISTRAL_MODEL to the exact model name served (e.g. "mistralai/Mistral-Small-3.2-24B-Instruct-2503")
+	model := os.Getenv("MISTRAL_MODEL")
+	if model == "" {
+		model = "mistral-small-latest"
+	}
+
+	fmt.Printf("[Mistral] URL=%s  Model=%s  Key=%s\n", baseURL, model, func() string {
+		if apiKey == "" {
+			return "(none)"
+		}
+		if len(apiKey) > 8 {
+			return apiKey[:4] + "..." + apiKey[len(apiKey)-4:]
+		}
+		return "****"
+	}())
+
 	return &MistralClient{
 		apiKey:  apiKey,
 		baseURL: baseURL,
+		model:   model,
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
@@ -66,7 +90,7 @@ func NewMistralClient(timeout time.Duration) (*MistralClient, error) {
 // Complete sends a chat completion request to Mistral
 func (c *MistralClient) Complete(ctx context.Context, systemPrompt, userPrompt string, temperature float64) (string, error) {
 	req := MistralRequest{
-		Model: "mistral-small-latest",
+		Model: c.model,
 		Messages: []MistralMessage{
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: userPrompt},
@@ -102,7 +126,7 @@ func (c *MistralClient) Complete(ctx context.Context, systemPrompt, userPrompt s
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
+		return "", fmt.Errorf("API error (status %d, url=%s, model=%s): %s", resp.StatusCode, c.baseURL, c.model, string(respBody))
 	}
 
 	var mistralResp MistralResponse
