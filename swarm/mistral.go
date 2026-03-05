@@ -87,8 +87,36 @@ func NewMistralClient(timeout time.Duration) (*MistralClient, error) {
 	}, nil
 }
 
-// Complete sends a chat completion request to Mistral
+// Complete sends a chat completion request to Mistral with retry on failure
 func (c *MistralClient) Complete(ctx context.Context, systemPrompt, userPrompt string, temperature float64) (string, error) {
+	const maxRetries = 2
+
+	var lastErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			// Wait before retry (2s, 4s)
+			delay := time.Duration(attempt*2) * time.Second
+			fmt.Printf("[Mistral] Retry %d/%d after %v...\n", attempt+1, maxRetries, delay)
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return "", fmt.Errorf("context cancelled during retry: %w", ctx.Err())
+			}
+		}
+
+		result, err := c.doComplete(ctx, systemPrompt, userPrompt, temperature)
+		if err == nil {
+			return result, nil
+		}
+		lastErr = err
+		fmt.Printf("[Mistral] Attempt %d failed: %v\n", attempt+1, err)
+	}
+
+	return "", lastErr
+}
+
+// doComplete performs a single API call
+func (c *MistralClient) doComplete(ctx context.Context, systemPrompt, userPrompt string, temperature float64) (string, error) {
 	req := MistralRequest{
 		Model: c.model,
 		Messages: []MistralMessage{

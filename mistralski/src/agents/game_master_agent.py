@@ -1057,12 +1057,31 @@ class GameMasterAgent:
                     "agent_id": r.agent_id,
                     "reaction_text": r.reaction_text,
                     "stat_changes": r.stat_changes,
+                    "phase1_reasoning": r.phase1_reasoning,
+                    "phase2_take": r.phase2_take,
+                    "phase3_revision": r.phase3_revision,
+                    "phase4_vote": r.phase4_vote,
+                    "confidence_initial": r.confidence_initial,
+                    "confidence_final": r.confidence_final,
+                    "rankings": [
+                        {"agent_id": rk.agent_id, "score": rk.score}
+                        for rk in r.rankings
+                    ],
+                    "political_color_shift": r.new_color,
                 }
                 for r in report.agent_reactions
             ],
             "agents_neutralized": report.agents_neutralized,
             "agents_promoted": report.agents_promoted,
         }
+
+        # Include arena state (scores, graveyard, death/clone info)
+        if report.arena_state:
+            context["arena_state"] = {
+                "agents": report.arena_state.get("agents", []),
+                "graveyard": report.arena_state.get("graveyard", []),
+                "scores": report.arena_state.get("scores", {}),
+            }
 
         if self.strategy_history:
             context["previous_strategies"] = [
@@ -1138,6 +1157,17 @@ class GameMasterAgent:
                     "agent_id": r.agent_id,
                     "reaction_text": r.reaction_text,
                     "stat_changes": r.stat_changes,
+                    "phase1_reasoning": r.phase1_reasoning,
+                    "phase2_take": r.phase2_take,
+                    "phase3_revision": r.phase3_revision,
+                    "phase4_vote": r.phase4_vote,
+                    "confidence_initial": r.confidence_initial,
+                    "confidence_final": r.confidence_final,
+                    "rankings": [
+                        {"agent_id": rk.agent_id, "score": rk.score}
+                        for rk in r.rankings
+                    ],
+                    "political_color_shift": r.new_color,
                 }
                 for r in report.agent_reactions
             ],
@@ -1145,6 +1175,11 @@ class GameMasterAgent:
             "indices_after": report.indices_after.model_dump(),
             "decerebration": report.decerebration,
         }
+        if report.arena_state:
+            turn_data["arena_state"] = {
+                "scores": report.arena_state.get("scores", {}),
+                "graveyard": report.arena_state.get("graveyard", []),
+            }
         _save_turn_memory(report.turn, turn_data)
 
         # Update cumulative — O(1) incremental

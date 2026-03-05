@@ -667,10 +667,22 @@ export function gameReducer(state: FullGameState, action: GameAction): FullGameS
       // Use agent_name from payload (from swarm AgentMessage), fallback to agent_id
       const agentName = action.payload.agent_name || action.payload.agent_id || "AGENT";
       const agentId = action.payload.agent_id || action.payload.agent_name || "unknown";
-      const message = action.payload.take || "...";
-
       // Determine line type based on phase
       const phase = action.payload.phase;
+
+      // Build display message — phase 4 has raw JSON, summarize rankings instead
+      let message: string;
+      if (action.payload.is_error) {
+        message = `⚠️ [API ERROR] ${action.payload.take}`;
+      } else if (phase === 4 && action.payload.rankings?.length) {
+        const ranked = action.payload.rankings
+          .sort((a, b) => a.score - b.score)
+          .map(r => `${r.score}. ${r.agent_id}`)
+          .join(", ");
+        message = `Vote: ${ranked}`;
+      } else {
+        message = action.payload.take || "...";
+      }
       let lineType: DebateLine["type"] = "argument";
       if (phase === 1) lineType = "reaction"; // cogitation
       if (phase === 3) lineType = "defense"; // revision
@@ -717,6 +729,7 @@ export function gameReducer(state: FullGameState, action: GameAction): FullGameS
           confidence: action.payload.confidence,
           rankings: action.payload.rankings,
           new_color: action.payload.new_color,
+          is_error: action.payload.is_error,
           timestamp: Date.now(),
         };
       }

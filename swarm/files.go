@@ -175,15 +175,31 @@ func WriteDeath(agent *Agent, round, score, lastConfidence int, lastMessage stri
 }
 
 // BuildSystemPrompt builds the system prompt for an agent
+// Uses in-memory generation to avoid WSL/NTFS filesystem issues
 func BuildSystemPrompt(agent *Agent) (string, error) {
-	agentMD, err := ReadFile(filepath.Join(agent.SessionDir, "AGENT.md"))
-	if err != nil {
-		return "", fmt.Errorf("failed to read AGENT.md: %w", err)
-	}
+	return BuildSystemPromptWithSession(agent, nil)
+}
 
-	soulMD, err := ReadFile(filepath.Join(agent.SessionDir, "SOUL.md"))
-	if err != nil {
-		return "", fmt.Errorf("failed to read SOUL.md: %w", err)
+// BuildSystemPromptWithSession builds the system prompt using session data directly
+// Falls back to file-based if session is nil (backward compat)
+func BuildSystemPromptWithSession(agent *Agent, session *Session) (string, error) {
+	var agentMD, soulMD string
+
+	if session != nil {
+		// Generate in-memory — no filesystem dependency
+		agentMD = GenerateAgentMD(agent, session)
+		soulMD = GenerateSoulMD(agent.Name, agent.PoliticalColor, session.Lang)
+	} else {
+		// Fallback: read from disk
+		var err error
+		agentMD, err = ReadFile(filepath.Join(agent.SessionDir, "AGENT.md"))
+		if err != nil {
+			return "", fmt.Errorf("failed to read AGENT.md: %w", err)
+		}
+		soulMD, err = ReadFile(filepath.Join(agent.SessionDir, "SOUL.md"))
+		if err != nil {
+			return "", fmt.Errorf("failed to read SOUL.md: %w", err)
+		}
 	}
 
 	memories, _ := ReadAllMemories(filepath.Join(agent.SessionDir, "memory"))

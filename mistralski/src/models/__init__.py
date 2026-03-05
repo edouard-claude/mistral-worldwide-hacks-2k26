@@ -1,4 +1,4 @@
-from src.models.agent import AgentLevel, AgentReaction, AgentState, AgentStats
+from src.models.agent import AgentLevel, AgentRanking, AgentReaction, AgentState, AgentStats
 from src.models.game import (
     GameState,
     GMStrategy,
@@ -16,6 +16,7 @@ from src.models.world import (
 
 __all__ = [
     "AgentLevel",
+    "AgentRanking",
     "AgentReaction",
     "AgentState",
     "AgentStats",

@@ -377,9 +377,22 @@ function dispatchWsEvent(
       dispatch({ type: "ARENA_WAITING", payload: data });
       break;
 
-    // Agent messages
+    // Agent messages (from SSE — GM sends {agent_id, agent_name, phase, content, confidence})
     case "agent_nats":
-      dispatch({ type: "AGENT_NATS", payload: data });
+      dispatch({
+        type: "AGENT_NATS",
+        payload: {
+          agent_id: data.agent_id,
+          agent_name: data.agent_name,
+          take: data.content || data.take || "",
+          phase: data.phase,
+          round: data.round,
+          confidence: data.confidence,
+          rankings: data.rankings,
+          new_color: data.new_color,
+          is_error: data.is_error || false,
+        },
+      });
       break;
 
     // LLM text (terminal) — parse and clean markdown code blocks
@@ -458,6 +471,7 @@ function dispatchWsEvent(
             confidence: data.confidence,
             rankings: data.rankings,
             new_color: data.new_color,
+            is_error: data.is_error || false,
           },
         });
         break;
@@ -487,6 +501,7 @@ function dispatchWsEvent(
             confidence: data.confidence,
             rankings: data.rankings,
             new_color: data.new_color,
+            is_error: data.is_error || false,
           },
         });
         break;

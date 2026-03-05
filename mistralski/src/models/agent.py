@@ -36,8 +36,15 @@ class AgentState(BaseModel):
     turn: int = 0
 
 
+class AgentRanking(BaseModel):
+    """A single ranking entry from phase 4 voting."""
+
+    agent_id: str
+    score: int
+
+
 class AgentReaction(BaseModel):
-    """An agent's reaction to a player action."""
+    """An agent's reaction to a player action — includes all 4 debate phases."""
 
     agent_id: str
     turn: int
@@ -46,3 +53,13 @@ class AgentReaction(BaseModel):
     stat_changes: dict[str, float] = Field(default_factory=dict)
     level_change: AgentLevel | None = None
     headline: str = ""
+    # Rich per-phase data from swarm arena
+    phase1_reasoning: str = ""
+    phase2_take: str = ""
+    phase3_revision: str = ""
+    phase4_vote: str = ""
+    confidence_initial: int = 0
+    confidence_final: int = 0
+    rankings: list[AgentRanking] = Field(default_factory=list)
+    new_color: float | None = None
+    is_error: bool = False

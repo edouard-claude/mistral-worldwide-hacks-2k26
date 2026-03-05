@@ -30,7 +30,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 import uvicorn
 
 from src.agents.game_master_agent import MEMORY_DIR, GameMasterAgent, KIND_BONUSES
-from src.models.agent import AgentLevel, AgentReaction, AgentState, AgentStats
+from src.models.agent import AgentLevel, AgentRanking, AgentReaction, AgentState, AgentStats
 from src.models.game import GameState, TurnReport
 from src.models.world import GlobalIndices, NewsKind
 
@@ -874,6 +874,7 @@ async def api_choose(
                                 phase = payload.get("phase", 0)
                                 content = payload.get("content", "")
                                 agent_name = payload.get("agent_name", "")
+                                print(f"[WH26-DBG] agent.output: {agent_name} phase={phase} content={content[:80]!r} conf={payload.get('confidence')}")
                                 confidence = payload.get("confidence", 0)
                                 # Accumulate per agent; prefer phase 2 (public take) for reaction text
                                 existing = agent_outputs.get(agent_id, {})
@@ -888,7 +889,11 @@ async def api_choose(
                                 elif phase == 4:
                                     existing["vote"] = content
                                     existing["rankings"] = payload.get("rankings", [])
+                                    if payload.get("new_color") is not None:
+                                        existing["new_color"] = payload["new_color"]
                                 existing[f"phase_{phase}"] = content
+                                is_error = payload.get("is_error", False)
+                                existing["is_error"] = existing.get("is_error", False) or is_error
                                 agent_outputs[agent_id] = existing
                             # Match agent.{uuid}.status
                             elif ".status" in subject and subject.startswith("agent."):
@@ -942,21 +947,41 @@ async def api_choose(
                 if arena_data:
                     # Use phase 2 public take, fallback to any content
                     text = arena_data.get("take", arena_data.get("phase_2", arena_data.get("phase_3", "...")))
-                    confidence = arena_data.get("confidence_final", arena_data.get("confidence_initial", 0))
-                    text_with_meta = f"[Confiance: {confidence}/5] {text}" if confidence else text
+                    conf_init = arena_data.get("confidence_initial", 0)
+                    conf_final = arena_data.get("confidence_final", conf_init)
+                    text_with_meta = f"[Confiance: {conf_final}/5] {text}" if conf_final else text
                     stat_changes = arena_data.get("stat_changes", {})
+                    # Build rankings from phase 4 data
+                    raw_rankings = arena_data.get("rankings", [])
+                    rankings = [
+                        AgentRanking(agent_id=r.get("agent_id", ""), score=r.get("score", 0))
+                        for r in raw_rankings if isinstance(r, dict)
+                    ]
                 else:
                     text_with_meta = "[pas de reaction — wh26 non disponible]"
                     stat_changes = {}
+                    conf_init = 0
+                    conf_final = 0
+                    rankings = []
                 reactions.append(AgentReaction(
                     agent_id=agent.agent_id, turn=gs.turn, action_id="news_reaction",
                     reaction_text=text_with_meta, stat_changes=stat_changes,
+                    phase1_reasoning=arena_data.get("phase_1", "") if arena_data else "",
+                    phase2_take=arena_data.get("phase_2", "") if arena_data else "",
+                    phase3_revision=arena_data.get("phase_3", "") if arena_data else "",
+                    phase4_vote=arena_data.get("phase_4", "") if arena_data else "",
+                    confidence_initial=conf_init,
+                    confidence_final=conf_final,
+                    rankings=rankings,
+                    new_color=arena_data.get("new_color") if arena_data else None,
+                    is_error=arena_data.get("is_error", False) if arena_data else False,
                 ))
             await _broadcast_to_frontend({
                 "type": "reactions",
                 "data": {
                     "agents": [a.model_dump() for a in gs.agents],
                     "reactions": "\n".join(f"- {r.agent_id}: {r.reaction_text}" for r in reactions),
+                    "reactions_detailed": [r.model_dump() for r in reactions],
                 },
             })
 
@@ -1325,11 +1350,22 @@ async def stream_choose(kind: str, lang: str = Query("fr", regex="^(fr|en)$")):
                                 elif phase == 4:
                                     existing["vote"] = content
                                     existing["rankings"] = payload.get("rankings", [])
+                                    if payload.get("new_color") is not None:
+                                        existing["new_color"] = payload["new_color"]
                                 existing[f"phase_{phase}"] = content
+                                is_error = payload.get("is_error", False)
+                                existing["is_error"] = existing.get("is_error", False) or is_error
                                 agent_outputs[agent_id] = existing
                                 await queue.put({
                                     "type": "agent_nats",
-                                    "data": {"agent_id": agent_id, "agent_name": agent_name, "phase": phase, "content": content, "confidence": confidence},
+                                    "data": {
+                                        "agent_id": agent_id, "agent_name": agent_name,
+                                        "phase": phase, "content": content, "confidence": confidence,
+                                        "round": payload.get("round", 0),
+                                        "rankings": payload.get("rankings", []),
+                                        "new_color": payload.get("new_color"),
+                                        "is_error": is_error,
+                                    },
                                 })
                             # Match agent.{uuid}.status
                             elif ".status" in subject and subject.startswith("agent."):
@@ -1403,15 +1439,33 @@ async def stream_choose(kind: str, lang: str = Query("fr", regex="^(fr|en)$")):
                 arena_data = agent_outputs.get(agent.agent_id, {})
                 if arena_data:
                     text = arena_data.get("take", arena_data.get("phase_2", arena_data.get("phase_3", "...")))
-                    confidence = arena_data.get("confidence_final", arena_data.get("confidence_initial", 0))
-                    text_with_meta = f"[Confiance: {confidence}/5] {text}" if confidence else text
+                    conf_init = arena_data.get("confidence_initial", 0)
+                    conf_final = arena_data.get("confidence_final", conf_init)
+                    text_with_meta = f"[Confiance: {conf_final}/5] {text}" if conf_final else text
                     stat_changes = arena_data.get("stat_changes", {})
+                    raw_rankings = arena_data.get("rankings", [])
+                    rankings = [
+                        AgentRanking(agent_id=r.get("agent_id", ""), score=r.get("score", 0))
+                        for r in raw_rankings if isinstance(r, dict)
+                    ]
                 else:
                     text_with_meta = "[pas de reaction — wh26 non disponible]"
                     stat_changes = {}
+                    conf_init = 0
+                    conf_final = 0
+                    rankings = []
                 reactions.append(AgentReaction(
                     agent_id=agent.agent_id, turn=gs.turn, action_id="news_reaction",
                     reaction_text=text_with_meta, stat_changes=stat_changes,
+                    phase1_reasoning=arena_data.get("phase_1", "") if arena_data else "",
+                    phase2_take=arena_data.get("phase_2", "") if arena_data else "",
+                    phase3_revision=arena_data.get("phase_3", "") if arena_data else "",
+                    phase4_vote=arena_data.get("phase_4", "") if arena_data else "",
+                    confidence_initial=conf_init,
+                    confidence_final=conf_final,
+                    rankings=rankings,
+                    new_color=arena_data.get("new_color") if arena_data else None,
+                    is_error=arena_data.get("is_error", False) if arena_data else False,
                 ))
             await queue.put({
                 "type": "reactions",

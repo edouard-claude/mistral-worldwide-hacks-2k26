@@ -264,6 +264,7 @@ export interface AgentNatsPayload {
   confidence?: number;
   rankings?: Array<{ agent_id: string; score: number }>;
   new_color?: number;
+  is_error?: boolean;
 }
 
 export interface AgentPhaseEntry {
@@ -272,6 +273,7 @@ export interface AgentPhaseEntry {
   confidence?: number;
   rankings?: Array<{ agent_id: string; score: number }>;
   new_color?: number;
+  is_error?: boolean;
   timestamp: number;
 }
 

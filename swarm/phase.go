@@ -71,7 +71,9 @@ func (pr *PhaseRunner) RunPhase1(round int) map[string]*AgentMessage {
 
 			_ = pr.nats.PublishAgentStatus(a.ID, "done", "Phase 1 complete")
 			if response != nil {
-				_ = pr.nats.PublishAgentOutput(a.ID, *response)
+				if err := pr.nats.PublishAgentOutput(a.ID, *response); err != nil {
+					fmt.Printf("[%s] NATS publish error: %v\n", a.Name, err)
+				}
 			}
 		}(agent)
 	}
@@ -81,10 +83,18 @@ func (pr *PhaseRunner) RunPhase1(round int) map[string]*AgentMessage {
 }
 
 func (pr *PhaseRunner) executePhase1(ctx context.Context, agent *Agent, round int) *AgentMessage {
-	systemPrompt, err := BuildSystemPrompt(agent)
+	systemPrompt, err := BuildSystemPromptWithSession(agent, pr.session)
 	if err != nil {
-		fmt.Printf("[%s] Error building system prompt: %v\n", agent.Name, err)
-		return nil
+		fmt.Printf("[%s] Phase 1 error (system prompt): %v\n", agent.Name, err)
+		return &AgentMessage{
+			AgentID:    agent.ID,
+			AgentName:  agent.Name,
+			Round:      round,
+			Phase:      1,
+			Content:    "Erreur de cogitation",
+			Confidence: agent.Confidence,
+			IsError:    true,
+		}
 	}
 
 	userPrompt := fmt.Sprintf(`Fake news : "%s"
@@ -108,6 +118,7 @@ JSON uniquement, reasoning COURT (50 mots max) :
 			Phase:      1,
 			Content:    "Erreur de cogitation",
 			Confidence: agent.Confidence,
+			IsError:    true,
 		}
 	}
 
@@ -117,7 +128,7 @@ JSON uniquement, reasoning COURT (50 mots max) :
 		Round:      round,
 		Phase:      1,
 		Content:    result.Reasoning,
-		Confidence: result.Confidence,
+		Confidence: result.EffectiveConfidence(),
 	}
 }
 
@@ -150,7 +161,9 @@ func (pr *PhaseRunner) RunPhase2(round int, phase1Responses map[string]*AgentMes
 
 			_ = pr.nats.PublishAgentStatus(a.ID, "done", "Phase 2 complete")
 			if response != nil {
-				_ = pr.nats.PublishAgentOutput(a.ID, *response)
+				if err := pr.nats.PublishAgentOutput(a.ID, *response); err != nil {
+					fmt.Printf("[%s] NATS publish error: %v\n", a.Name, err)
+				}
 			}
 		}(agent)
 	}
@@ -160,9 +173,17 @@ func (pr *PhaseRunner) RunPhase2(round int, phase1Responses map[string]*AgentMes
 }
 
 func (pr *PhaseRunner) executePhase2(ctx context.Context, agent *Agent, round int, phase1 *AgentMessage) *AgentMessage {
-	systemPrompt, err := BuildSystemPrompt(agent)
+	systemPrompt, err := BuildSystemPromptWithSession(agent, pr.session)
 	if err != nil {
-		return nil
+		fmt.Printf("[%s] Phase 2 error (system prompt): %v\n", agent.Name, err)
+		return &AgentMessage{
+			AgentID:   agent.ID,
+			AgentName: agent.Name,
+			Round:     round,
+			Phase:     2,
+			Content:   "Je maintiens ma position.",
+			IsError:   true,
+		}
 	}
 
 	confidence := agent.Confidence
@@ -194,6 +215,7 @@ Sois concis et persuasif !`,
 			Round:     round,
 			Phase:     2,
 			Content:   "Je maintiens ma position.",
+			IsError:   true,
 		}
 	}
 
@@ -250,7 +272,9 @@ func (pr *PhaseRunner) RunPhase3(round int, phase2Responses map[string]*AgentMes
 
 			_ = pr.nats.PublishAgentStatus(a.ID, "done", "Phase 3 complete")
 			if response != nil {
-				_ = pr.nats.PublishAgentOutput(a.ID, *response)
+				if err := pr.nats.PublishAgentOutput(a.ID, *response); err != nil {
+					fmt.Printf("[%s] NATS publish error: %v\n", a.Name, err)
+				}
 			}
 		}(agent)
 	}
@@ -260,9 +284,18 @@ func (pr *PhaseRunner) RunPhase3(round int, phase2Responses map[string]*AgentMes
 }
 
 func (pr *PhaseRunner) executePhase3(ctx context.Context, agent *Agent, round int, chat string) *AgentMessage {
-	systemPrompt, err := BuildSystemPrompt(agent)
+	systemPrompt, err := BuildSystemPromptWithSession(agent, pr.session)
 	if err != nil {
-		return nil
+		fmt.Printf("[%s] Phase 3 error (system prompt): %v\n", agent.Name, err)
+		return &AgentMessage{
+			AgentID:    agent.ID,
+			AgentName:  agent.Name,
+			Round:      round,
+			Phase:      3,
+			Content:    "Je maintiens ma position initiale.",
+			Confidence: agent.Confidence,
+			IsError:    true,
+		}
 	}
 
 	userPrompt := fmt.Sprintf(`Débat sur "%s" :
@@ -290,6 +323,7 @@ JSON uniquement :
 			Phase:      3,
 			Content:    "Je maintiens ma position initiale.",
 			Confidence: agent.Confidence,
+			IsError:    true,
 		}
 	}
 
@@ -299,7 +333,7 @@ JSON uniquement :
 		Round:      round,
 		Phase:      3,
 		Content:    result.FinalTake,
-		Confidence: result.Confidence,
+		Confidence: result.EffectiveConfidence(),
 	}
 }
 
@@ -357,7 +391,9 @@ func (pr *PhaseRunner) RunPhase4(round int, phase2Responses, phase3Responses map
 
 			_ = pr.nats.PublishAgentStatus(a.ID, "done", "Phase 4 complete")
 			if response != nil {
-				_ = pr.nats.PublishAgentOutput(a.ID, *response)
+				if err := pr.nats.PublishAgentOutput(a.ID, *response); err != nil {
+					fmt.Printf("[%s] NATS publish error: %v\n", a.Name, err)
+				}
 			}
 		}(agent)
 	}
@@ -367,9 +403,10 @@ func (pr *PhaseRunner) RunPhase4(round int, phase2Responses, phase3Responses map
 }
 
 func (pr *PhaseRunner) executePhase4(ctx context.Context, agent *Agent, round int, takesP2, takesP3 []string, others []*Agent) *AgentMessage {
-	systemPrompt, err := BuildSystemPrompt(agent)
+	systemPrompt, err := BuildSystemPromptWithSession(agent, pr.session)
 	if err != nil {
-		return nil
+		fmt.Printf("[%s] Phase 4 error (system prompt): %v\n", agent.Name, err)
+		return nil // Phase 4 nil is handled downstream (no rankings to produce)
 	}
 
 	// Build list of other agent names

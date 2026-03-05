@@ -36,6 +36,7 @@ type AgentMessage struct {
 	Confidence int     `json:"confidence,omitempty"`  // 1-5 (phases 1, 3)
 	Rankings   []Rank  `json:"rankings,omitempty"`    // phase 4 only
 	NewColor   float64 `json:"new_color,omitempty"`   // phase 4, if revised
+	IsError    bool    `json:"is_error,omitempty"`    // true if fallback error text
 }
 
 // Rank represents an agent's ranking of another agent
@@ -109,14 +110,32 @@ type GlobalState struct {
 // Phase1Response is the expected JSON from Mistral in phase 1
 type Phase1Response struct {
 	Confidence int    `json:"confidence"`
+	Confiance  int    `json:"confiance"` // French alias — LLM sometimes uses this
 	Reasoning  string `json:"reasoning"`
+}
+
+// EffectiveConfidence returns Confidence, falling back to Confiance (French alias)
+func (r Phase1Response) EffectiveConfidence() int {
+	if r.Confidence > 0 {
+		return r.Confidence
+	}
+	return r.Confiance
 }
 
 // Phase3Response is the expected JSON from Mistral in phase 3
 type Phase3Response struct {
 	Confidence int    `json:"confidence"`
+	Confiance  int    `json:"confiance"` // French alias
 	FinalTake  string `json:"final_take"`
 	Revised    bool   `json:"revised"`
+}
+
+// EffectiveConfidence returns Confidence, falling back to Confiance (French alias)
+func (r Phase3Response) EffectiveConfidence() int {
+	if r.Confidence > 0 {
+		return r.Confidence
+	}
+	return r.Confiance
 }
 
 // Phase4Response is the expected JSON from Mistral in phase 4

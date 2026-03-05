@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -42,6 +43,21 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error initializing Mistral client: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Test API connectivity before accepting sessions
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	testContent, testErr := mistral.Complete(ctx, "You are a test.", "Reply 'ok'.", 0.0)
+	cancel()
+	if testErr != nil {
+		fmt.Fprintf(os.Stderr, "⚠️  WARNING: Mistral API test FAILED: %v\n", testErr)
+		fmt.Fprintf(os.Stderr, "⚠️  Agents will produce fallback error text!\n")
+	} else {
+		preview := testContent
+		if len(preview) > 50 {
+			preview = preview[:50]
+		}
+		fmt.Printf("✅ Mistral API OK: %q\n", preview)
 	}
 
 	absBaseDir, err := filepath.Abs(*baseDir)
@@ -123,6 +139,13 @@ func runGame(sessionID string, lang string, rawNC *nats.Conn, mistral *MistralCl
 		activeSessionsMu.Lock()
 		delete(activeSessions, sessionID)
 		activeSessionsMu.Unlock()
+	}()
+
+	// Recover from panics so one session crash doesn't kill the dispatcher
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(os.Stderr, "[%s] PANIC recovered: %v\n", sessionID, r)
+		}
 	}()
 
 	// Get or create session
@@ -246,7 +269,7 @@ func runGame(sessionID string, lang string, rawNC *nats.Conn, mistral *MistralCl
 			if agent == nil || !agent.Alive {
 				continue
 			}
-			if resp, ok := responses2[agent.ID]; ok {
+			if resp, ok := responses2[agent.ID]; ok && resp != nil {
 				phase2Messages = append(phase2Messages, resp)
 				fmt.Printf("[%s]   [%s] Take publié (%d caractères)\n", sessionID, agent.Name, len(resp.Content))
 			}
@@ -263,7 +286,7 @@ func runGame(sessionID string, lang string, rawNC *nats.Conn, mistral *MistralCl
 			if agent == nil || !agent.Alive {
 				continue
 			}
-			if resp, ok := responses3[agent.ID]; ok {
+			if resp, ok := responses3[agent.ID]; ok && resp != nil {
 				phase3Messages = append(phase3Messages, resp)
 				fmt.Printf("[%s]   [%s] Confiance finale: %d/5\n", sessionID, agent.Name, resp.Confidence)
 			}
