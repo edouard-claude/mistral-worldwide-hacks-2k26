@@ -1,15 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import agentGm from "@/assets/agent_gm.png";
-import agentKgb from "@/assets/agent_kgb.png";
-import agentMoustache from "@/assets/agent_moustache.png";
-import agentPropa from "@/assets/agent_propa.png";
-import agentSabot from "@/assets/agent_sabot.png";
+import { allPortraits } from "@/lib/agentAvatars";
 
 interface WelcomeScreenProps {
   onStart: (lang: "fr" | "en") => void;
 }
 
-const agentPortraits = [agentKgb, agentMoustache, agentPropa, agentSabot];
+const agentPortraits = allPortraits.slice(0, 4);
 
 const rulesData = {
   fr: [

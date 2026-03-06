@@ -7,24 +7,7 @@ import { useGame } from "@/hooks/useGame";
 import { useLang } from "@/i18n/LanguageContext";
 import { tr } from "@/i18n/translations";
 import { renderMarkdown } from "@/utils/terminalMarkdown";
-import agentKgb from "@/assets/agent_kgb.png";
-import agentSabot from "@/assets/agent_sabot.png";
-import agentPropa from "@/assets/agent_propa.png";
-import agentMoustache from "@/assets/agent_moustache.png";
-
-const avatarMap: Record<string, string> = {
-  ag1: agentKgb, ag2: agentSabot, ag3: agentPropa, ag4: agentMoustache,
-};
-
-function getAvatar(agent: Agent): string {
-  if (avatarMap[agent.id]) return avatarMap[agent.id];
-  if (agent.status.includes("KGB_TR0LL")) return agentKgb;
-  if (agent.status.includes("SABOT_1917")) return agentSabot;
-  if (agent.status.includes("PROPA_GUERILLA")) return agentPropa;
-  if (agent.status.includes("MOUSTACHE_BOT")) return agentMoustache;
-  const portraits = [agentKgb, agentSabot, agentPropa, agentMoustache];
-  return portraits[agent.name.length % portraits.length];
-}
+import { getAgentAvatar } from "@/lib/agentAvatars";
 
 const personalities: Record<string, Record<string, { bio: string; trait: string; weakness: string }>> = {
   ag1: {
@@ -287,7 +270,7 @@ const AgentDetailModal = ({ agent, rank, onClose }: AgentDetailModalProps) => {
         {/* HEADER */}
         <div className="relative bg-soviet-black p-4 border-b-4 border-primary shrink-0">
           <div className="flex gap-4 items-center">
-            <img src={getAvatar(agent)} alt={agent.name}
+            <img src={getAgentAvatar(agent.name)} alt={agent.name}
               className="w-20 h-20 object-cover border-4 border-foreground"
               style={{ boxShadow: "4px 4px 0px hsl(var(--black))" }} />
             <div>

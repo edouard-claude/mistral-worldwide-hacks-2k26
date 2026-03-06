@@ -1,27 +1,10 @@
 import { createPortal } from "react-dom";
 import type { FallenAgent } from "@/types/ws-events";
-import agentKgb from "@/assets/agent_kgb.png";
-import agentSabot from "@/assets/agent_sabot.png";
-import agentPropa from "@/assets/agent_propa.png";
-import agentMoustache from "@/assets/agent_moustache.png";
 import agentGm from "@/assets/agent_gm.png";
 import hallHeroesIcon from "@/assets/hall_heroes_icon.png";
 import { useLang } from "@/i18n/LanguageContext";
 import { tr } from "@/i18n/translations";
-
-const avatarMap: Record<string, string> = {
-  ag1: agentKgb, ag2: agentSabot, ag3: agentPropa, ag4: agentMoustache,
-};
-
-function getAvatar(agentId: string, agentName: string): string {
-  if (avatarMap[agentId]) return avatarMap[agentId];
-  if (agentName.includes("KGB_TR0LL")) return agentKgb;
-  if (agentName.includes("SABOT_1917")) return agentSabot;
-  if (agentName.includes("PROPA_GUERILLA")) return agentPropa;
-  if (agentName.includes("MOUSTACHE_BOT")) return agentMoustache;
-  const portraits = [agentKgb, agentSabot, agentPropa, agentMoustache];
-  return portraits[agentName.length % portraits.length];
-}
+import { getAgentAvatar } from "@/lib/agentAvatars";
 
 interface HallOfHeroesProps {
   fallenAgents: FallenAgent[];
@@ -77,7 +60,7 @@ const HallOfHeroes = ({ fallenAgents, onClose }: HallOfHeroesProps) => {
 
                   <div className="flex gap-4 items-start mb-3">
                     <div className="relative shrink-0">
-                      <img src={getAvatar(fallen.agent.id, fallen.agent.name)} alt={fallen.agent.name}
+                      <img src={getAgentAvatar(fallen.agent.name)} alt={fallen.agent.name}
                         className="w-16 h-16 object-cover"
                         style={{
                           imageRendering: "pixelated", border: "4px solid hsl(var(--black))",

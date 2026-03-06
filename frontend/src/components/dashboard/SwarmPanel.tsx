@@ -1,10 +1,6 @@
 import { useState, useMemo } from "react";
 import type { Agent, DebateLine } from "@/data/gameData";
 import { useGame } from "@/hooks/useGame";
-import agentKgb from "@/assets/agent_kgb.png";
-import agentSabot from "@/assets/agent_sabot.png";
-import agentPropa from "@/assets/agent_propa.png";
-import agentMoustache from "@/assets/agent_moustache.png";
 import AgentDetailModal from "./AgentDetailModal";
 import HallOfHeroes from "./HallOfHeroes";
 import hallHeroesIcon from "@/assets/hall_heroes_icon.png";
@@ -12,20 +8,7 @@ import { useLang } from "@/i18n/LanguageContext";
 import { tr } from "@/i18n/translations";
 import { AgentSkeletonGrid } from "@/components/skeletons/AgentSkeleton";
 import { getAgentColor } from "@/lib/agentColors";
-
-const avatarMap: Record<string, string> = {
-  ag1: agentKgb, ag2: agentSabot, ag3: agentPropa, ag4: agentMoustache,
-};
-
-function getAvatar(agent: Agent): string {
-  if (avatarMap[agent.id]) return avatarMap[agent.id];
-  if (agent.status.includes("KGB_TR0LL")) return agentKgb;
-  if (agent.status.includes("SABOT_1917")) return agentSabot;
-  if (agent.status.includes("PROPA_GUERILLA")) return agentPropa;
-  if (agent.status.includes("MOUSTACHE_BOT")) return agentMoustache;
-  const portraits = [agentKgb, agentSabot, agentPropa, agentMoustache];
-  return portraits[agent.name.length % portraits.length];
-}
+import { getAgentAvatar } from "@/lib/agentAvatars";
 
 /** Conviction blocks: 1-5 scale rendered as filled/empty blocks */
 function ConvictionBlocks({ value }: { value: number }) {
@@ -235,7 +218,7 @@ const SwarmPanel = () => {
               <div className="flex gap-3 mb-2">
                 <div className="relative shrink-0">
                   <img
-                    src={getAvatar(agent)}
+                    src={getAgentAvatar(agent.name)}
                     alt={agent.name}
                     className="w-16 h-16 object-cover shrink-0 transition-all duration-300"
                     style={{
