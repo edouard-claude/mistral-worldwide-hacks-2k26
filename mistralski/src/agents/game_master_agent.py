@@ -905,7 +905,7 @@ class GameMasterAgent:
                 "next_turn_plan": last.next_turn_plan,
                 "threat_agents": last.threat_agents,
                 "weak_spots": last.weak_spots,
-                "desired_pick": last.desired_pick,
+                "desired_pick": last.desired_pick_str,
                 "manipulation_tactic": last.manipulation_tactic,
             }
 

@@ -96,12 +96,12 @@ function getPersonality(agent: Agent, lang: string) {
   return clonePersonality[lang] || clonePersonality["fr"];
 }
 
-// Phase config: icon, color, label key
+// Phase config: icon, color (must contrast on paper bg), label key
 const PHASE_CONFIG: Record<number, { icon: string; color: string; labelKey: string }> = {
-  1: { icon: "\u{1F9E0}", color: "hsl(133, 100%, 30%)", labelKey: "agent.phase1" },    // brain
-  2: { icon: "\u{1F4E2}", color: "hsl(48, 100%, 40%)", labelKey: "agent.phase2" },     // megaphone
-  3: { icon: "\u{1F504}", color: "hsl(30, 41%, 55%)", labelKey: "agent.phase3" },       // arrows
-  4: { icon: "\u{1F5F3}\uFE0F", color: "hsl(0, 100%, 40%)", labelKey: "agent.phase4" }, // ballot box
+  1: { icon: "\u{1F9E0}", color: "hsl(133, 60%, 25%)", labelKey: "agent.phase1" },     // brain — dark green
+  2: { icon: "\u{1F4E2}", color: "hsl(30, 70%, 35%)", labelKey: "agent.phase2" },      // megaphone — dark amber
+  3: { icon: "\u{1F504}", color: "hsl(210, 50%, 40%)", labelKey: "agent.phase3" },      // arrows — steel blue
+  4: { icon: "\u{1F5F3}\uFE0F", color: "hsl(0, 60%, 35%)", labelKey: "agent.phase4" }, // ballot box — dark red
 };
 
 function ConfidenceBar({ value, max = 5 }: { value: number; max?: number }) {
@@ -109,9 +109,9 @@ function ConfidenceBar({ value, max = 5 }: { value: number; max?: number }) {
   return (
     <span className="inline-flex items-center gap-0.5 ml-1">
       {Array.from({ length: max }, (_, i) => (
-        <span key={i} className={`inline-block w-1.5 h-3 ${i < filled ? "bg-comic-yellow" : "bg-foreground/15"}`} />
+        <span key={i} className={`inline-block w-2 h-3.5 border border-soviet-black/20 ${i < filled ? "bg-comic-yellow" : "bg-soviet-black/10"}`} />
       ))}
-      <span className="text-[9px] ml-1 text-secondary/70">{value}/{max}</span>
+      <span className="text-[10px] ml-1 text-soviet-black/70 font-bold">{value}/{max}</span>
     </span>
   );
 }
@@ -134,19 +134,19 @@ function PhaseBlock({
 
   return (
     <div
-      className={`border-l-3 pl-3 py-2 my-1.5 transition-opacity duration-300 ${pending ? "opacity-30" : ""}`}
-      style={{ borderColor: config.color }}
+      className={`border-l-4 pl-3 py-2.5 my-2 transition-opacity duration-300 ${pending ? "opacity-30" : ""}`}
+      style={{ borderColor: config.color, background: `linear-gradient(90deg, ${config.color}08, transparent)` }}
     >
-      <div className="flex items-center gap-1.5 mb-1">
-        <span className="text-sm">{config.icon}</span>
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="text-base">{config.icon}</span>
         <span
-          className="text-[9px] px-1.5 py-0.5 border font-heading tracking-wider font-bold"
+          className="text-[10px] px-2 py-0.5 border-2 font-heading tracking-widest font-bold uppercase"
           style={{ borderColor: config.color, color: config.color }}
         >
           {tr(config.labelKey as any, lang)}
         </span>
         {entry?.confidence !== undefined && (
-          <span className="text-[9px] text-secondary/60 ml-auto flex items-center gap-1">
+          <span className="text-[10px] text-soviet-black/70 ml-auto flex items-center gap-1 font-bold">
             {tr("agent.confidence", lang)}:
             <ConfidenceBar value={entry.confidence} />
           </span>
@@ -154,37 +154,34 @@ function PhaseBlock({
       </div>
 
       {pending ? (
-        <div className="flex items-center gap-1.5 text-secondary/40 text-[10px] italic">
-          <span className="inline-block w-1.5 h-3 bg-secondary/30" style={{ animation: "typewriter-cursor 0.8s step-end infinite" }} />
+        <div className="flex items-center gap-1.5 text-soviet-black/40 text-xs italic">
+          <span className="inline-block w-1.5 h-3 bg-soviet-black/30" style={{ animation: "typewriter-cursor 0.8s step-end infinite" }} />
           ...
         </div>
       ) : entry ? (
-        <div className="text-foreground/80 text-[11px] leading-relaxed">
+        <div className="text-xs leading-relaxed" style={{ color: "hsl(0 0% 4% / 0.85)" }}>
           {phaseNum === 3 && (
-            <span className="text-[8px] px-1 py-px border border-secondary/30 bg-secondary/10 text-secondary font-heading tracking-wider mr-1.5">
+            <span className="text-[9px] px-1.5 py-0.5 border font-heading tracking-wider mr-2 inline-block mb-1"
+              style={{ borderColor: "hsl(0 0% 4% / 0.3)", background: "hsl(0 0% 4% / 0.05)", color: "hsl(0 0% 4% / 0.7)" }}>
               REVISED
             </span>
           )}
           {phaseNum === 4 && entry.rankings ? (
-            <div className="space-y-1">
-              <div className="flex gap-2 flex-wrap">
+            <div className="space-y-1.5">
+              <div className="flex gap-3 flex-wrap">
                 {entry.rankings
-                  .sort((a, b) => b.score - a.score)
-                  .map((r, i) => (
-                    <span key={r.agent_id} className="text-[10px]">
-                      <span className="font-bold text-comic-yellow">#{i + 1}</span>{" "}
-                      <span className="text-foreground/80">{agentNames[r.agent_id] || r.agent_id}</span>
-                      <span className="text-secondary/50 ml-0.5">({r.score})</span>
+                  .sort((a, b) => a.score - b.score)
+                  .map((r) => (
+                    <span key={r.agent_id} className="text-xs flex items-center gap-1">
+                      <span className="font-comic text-sm" style={{ color: "hsl(0 0% 4%)" }}>#{r.score}</span>
+                      <span className="font-heading" style={{ color: "hsl(0 0% 4% / 0.8)" }}>{agentNames[r.agent_id] || r.agent_id}</span>
                     </span>
                   ))}
               </div>
               {entry.new_color !== undefined && (
-                <div className="text-[9px] text-secondary/60 mt-1">
-                  {tr("agent.politicalShift", lang)}: <span className="font-bold text-foreground/70">{entry.new_color.toFixed(2)}</span>
+                <div className="text-[10px] mt-1" style={{ color: "hsl(0 0% 4% / 0.6)" }}>
+                  {tr("agent.politicalShift", lang)}: <span className="font-bold" style={{ color: "hsl(0 0% 4% / 0.8)" }}>{entry.new_color.toFixed(2)}</span>
                 </div>
-              )}
-              {entry.content && (
-                <div className="mt-1">{renderMarkdown(entry.content)}</div>
               )}
             </div>
           ) : (
@@ -213,13 +210,13 @@ function RoundBlock({
     <div className={`${isCurrent ? "" : "mt-1"}`}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 w-full text-left py-1.5 hover:opacity-80 transition-opacity"
+        className="flex items-center gap-2 w-full text-left py-2 hover:opacity-80 transition-opacity"
       >
         {open ? <ChevronDown size={14} className="text-soviet-red/60" /> : <ChevronRight size={14} className="text-soviet-red/60" />}
-        <span className="text-[10px] font-heading tracking-widest text-soviet-red/80 font-bold">
+        <span className="text-xs font-heading tracking-widest text-soviet-red/80 font-bold uppercase">
           {isCurrent ? tr("agent.currentRound", lang) : tr("agent.round", lang)} {roundHistory.round}
         </span>
-        <span className="text-[8px] text-secondary/40 ml-auto">
+        <span className="text-[9px] text-soviet-black/40 ml-auto font-heading">
           {Object.keys(roundHistory.phases).length}/4
         </span>
       </button>
@@ -313,38 +310,38 @@ const AgentDetailModal = ({ agent, rank, onClose }: AgentDetailModalProps) => {
         </div>
 
         {/* SCROLLABLE BODY */}
-        <div className="overflow-y-auto flex-1 p-5 space-y-4" style={{ fontFamily: "'Courier New', Courier, monospace" }}>
+        <div className="overflow-y-auto flex-1 p-5 space-y-4">
 
           {/* STATS */}
-          <div className="space-y-2">
+          <div className="space-y-3">
             {/* Conviction: 1-5 blocks */}
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] w-24 shrink-0 font-heading font-bold">{tr("agent.confidence", lang)}</span>
-              <span className="inline-flex items-center gap-0.5">
+            <div className="flex items-center gap-3">
+              <span className="text-xs w-28 shrink-0 font-heading font-bold tracking-wider uppercase text-soviet-black">{tr("agent.confidence", lang)}</span>
+              <span className="inline-flex items-center gap-1">
                 {Array.from({ length: 5 }, (_, i) => (
-                  <span key={i} className={`inline-block w-3 h-4 border border-foreground/30 ${
-                    i < Math.round(agent.confidence) ? "bg-comic-yellow" : "bg-foreground/10"
+                  <span key={i} className={`inline-block w-4 h-5 border-2 border-soviet-black/30 ${
+                    i < Math.round(agent.confidence) ? "bg-comic-yellow" : "bg-soviet-black/10"
                   }`} />
                 ))}
               </span>
-              <span className="text-[11px] ml-1 font-bold">{agent.confidence}/5</span>
+              <span className="text-sm ml-1 font-bold font-heading text-soviet-black">{agent.confidence}/5</span>
             </div>
             {/* Political position: marker on axis */}
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] w-24 shrink-0 font-heading font-bold">{tr("agent.politicalShift", lang)}</span>
-              <div className="flex-1 relative h-3 border border-foreground/20 overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-r from-red-600/30 via-foreground/5 to-blue-700/30" />
+            <div className="flex items-center gap-3">
+              <span className="text-xs w-28 shrink-0 font-heading font-bold tracking-wider uppercase text-soviet-black">{tr("agent.politicalShift", lang)}</span>
+              <div className="flex-1 relative h-4 border-2 border-soviet-black/20 overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-r from-red-600/30 via-soviet-black/5 to-blue-700/30" />
                 <div
-                  className="absolute top-0 w-1 h-full bg-comic-yellow border-x border-foreground/50 transition-all duration-700"
+                  className="absolute top-0 w-1.5 h-full bg-comic-yellow border-x border-soviet-black/50 transition-all duration-700"
                   style={{ left: `${agent.politicalColor * 100}%` }}
                 />
               </div>
-              <span className="text-[11px] w-10 text-right font-bold">{agent.politicalColor.toFixed(2)}</span>
+              <span className="text-sm w-12 text-right font-bold font-heading text-soviet-black">{agent.politicalColor.toFixed(2)}</span>
             </div>
             {/* Temperature: heat bar */}
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] w-24 shrink-0 font-heading font-bold">{tr("swarm.temperature", lang)}</span>
-              <div className="flex-1 h-3 border border-foreground/20 overflow-hidden">
+            <div className="flex items-center gap-3">
+              <span className="text-xs w-28 shrink-0 font-heading font-bold tracking-wider uppercase text-soviet-black">{tr("swarm.temperature", lang)}</span>
+              <div className="flex-1 h-4 border-2 border-soviet-black/20 overflow-hidden">
                 <div
                   className="h-full transition-all duration-700"
                   style={{
@@ -353,14 +350,32 @@ const AgentDetailModal = ({ agent, rank, onClose }: AgentDetailModalProps) => {
                   }}
                 />
               </div>
-              <span className="text-[11px] w-10 text-right font-bold">{(agent.temperature * 100).toFixed(0)}%</span>
+              <span className="text-sm w-12 text-right font-bold font-heading text-soviet-black">{(agent.temperature * 100).toFixed(0)}%</span>
+            </div>
+          </div>
+
+          {/* BIO — always visible */}
+          <div className="border-t-2 border-soviet-black/15 pt-3">
+            <div className="mb-3">
+              <h3 className="font-heading text-sm tracking-widest text-soviet-black/60 mb-1.5 uppercase">{tr("agent.biography", lang)}</h3>
+              <p className="text-sm italic leading-relaxed text-soviet-black/80">{personality.bio}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="border-3 border-soviet-black/20 p-3" style={{ boxShadow: "4px 4px 0px hsl(var(--black) / 0.2)" }}>
+                <div className="font-heading text-xs tracking-widest uppercase mb-1" style={{ color: "hsl(30, 70%, 35%)" }}>{tr("agent.trait", lang)}</div>
+                <p className="text-sm leading-relaxed text-soviet-black/80">{personality.trait}</p>
+              </div>
+              <div className="border-3 border-soviet-black/20 p-3" style={{ boxShadow: "4px 4px 0px hsl(var(--black) / 0.2)" }}>
+                <div className="font-heading text-xs tracking-widest uppercase mb-1" style={{ color: "hsl(0, 60%, 35%)" }}>{tr("agent.weakness", lang)}</div>
+                <p className="text-sm leading-relaxed text-soviet-black/80">{personality.weakness}</p>
+              </div>
             </div>
           </div>
 
           {/* DEBATE HISTORY */}
           {hasHistory ? (
-            <div className="border-t-2 border-foreground/10 pt-3">
-              <h3 className="font-heading text-xs tracking-widest text-muted-foreground mb-2">
+            <div className="border-t-2 border-soviet-black/15 pt-3">
+              <h3 className="font-heading text-sm tracking-widest text-soviet-black/60 mb-2 uppercase">
                 {tr("agent.debateHistory", lang)}
               </h3>
               {sortedRounds.map(roundH => (
@@ -374,25 +389,8 @@ const AgentDetailModal = ({ agent, rank, onClose }: AgentDetailModalProps) => {
               ))}
             </div>
           ) : (
-            /* FALLBACK: hardcoded bio */
-            <div className="border-t-2 border-foreground/10 pt-3">
-              <div className="mb-3">
-                <h3 className="font-heading text-xs tracking-widest text-muted-foreground mb-1">{tr("agent.biography", lang)}</h3>
-                <p className="text-sm italic leading-relaxed">{personality.bio}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="border-2 border-foreground/20 p-2.5" style={{ boxShadow: "3px 3px 0px hsl(var(--black) / 0.2)" }}>
-                  <div className="font-heading text-[10px] tracking-widest text-comic-yellow">{tr("agent.trait", lang)}</div>
-                  <p className="text-xs mt-1">{personality.trait}</p>
-                </div>
-                <div className="border-2 border-foreground/20 p-2.5" style={{ boxShadow: "3px 3px 0px hsl(var(--black) / 0.2)" }}>
-                  <div className="font-heading text-[10px] tracking-widest text-primary">{tr("agent.weakness", lang)}</div>
-                  <p className="text-xs mt-1">{personality.weakness}</p>
-                </div>
-              </div>
-              <div className="text-[10px] text-secondary/40 italic mt-3 text-center">
-                {tr("agent.noHistory", lang)}
-              </div>
+            <div className="text-xs text-soviet-black/40 italic text-center py-2">
+              {tr("agent.noHistory", lang)}
             </div>
           )}
 

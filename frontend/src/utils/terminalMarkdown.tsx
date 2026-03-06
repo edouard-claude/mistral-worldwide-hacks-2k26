@@ -42,7 +42,7 @@ export function renderInline(text: string): JSX.Element {
     const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
     if (boldMatch && boldMatch.index !== undefined) {
       if (boldMatch.index > 0) parts.push(remaining.slice(0, boldMatch.index));
-      parts.push(<strong key={key++} className="text-foreground font-bold">{boldMatch[1]}</strong>);
+      parts.push(<strong key={key++} className="font-bold text-inherit">{boldMatch[1]}</strong>);
       remaining = remaining.slice(boldMatch.index + boldMatch[0].length);
       continue;
     }

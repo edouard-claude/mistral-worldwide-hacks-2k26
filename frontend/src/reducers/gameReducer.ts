@@ -680,6 +680,35 @@ export function gameReducer(state: FullGameState, action: GameAction): FullGameS
           .map(r => `${r.score}. ${r.agent_id}`)
           .join(", ");
         message = `Vote: ${ranked}`;
+      } else if (phase === 4) {
+        // Phase 4 without parsed rankings — try to extract from raw JSON
+        const raw = action.payload.take || "";
+        try {
+          const jsonMatch = raw.match(/\{[\s\S]*"rankings"[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (parsed.rankings?.length) {
+              const ranked = parsed.rankings
+                .sort((a: { score: number }, b: { score: number }) => a.score - b.score)
+                .map((r: { agent_id: string; score: number }) => `${r.score}. ${r.agent_id}`)
+                .join(", ");
+              message = `Vote: ${ranked}`;
+              // Also populate rankings for agentHistory
+              if (!action.payload.rankings) {
+                action.payload.rankings = parsed.rankings;
+              }
+              if (parsed.new_color !== undefined && action.payload.new_color === undefined) {
+                action.payload.new_color = parsed.new_color;
+              }
+            } else {
+              message = "Vote enregistré";
+            }
+          } else {
+            message = "Vote enregistré";
+          }
+        } catch {
+          message = "Vote enregistré";
+        }
       } else {
         message = action.payload.take || "...";
       }

@@ -62,5 +62,12 @@ class GMStrategy(BaseModel):
     next_turn_plan: str = ""  # What kind of news to push next
     long_term_goal: str = ""  # Multi-turn strategy
     # Internal — player manipulation (NEVER sent to frontend)
-    desired_pick: str = ""  # "real", "fake", or "satirical" — what we want the player to choose
+    desired_pick: str | dict = ""  # "real", "fake", or "satirical" — what we want the player to choose
     manipulation_tactic: str = ""  # How to steer the player toward desired_pick
+
+    @property
+    def desired_pick_str(self) -> str:
+        """Normalize desired_pick: LLM sometimes returns a dict instead of str."""
+        if isinstance(self.desired_pick, dict):
+            return self.desired_pick.get("kind", self.desired_pick.get("text", ""))
+        return self.desired_pick

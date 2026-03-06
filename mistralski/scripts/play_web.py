@@ -803,7 +803,7 @@ async def api_choose(
             # 0. Track manipulation
             if gm.strategy_history:
                 prev = gm.strategy_history[-1]
-                desired = prev.desired_pick or "fake"
+                desired = prev.desired_pick_str or "fake"
                 tactic = prev.manipulation_tactic or ""
             else:
                 desired = "fake"
@@ -1256,7 +1256,7 @@ async def stream_choose(kind: str, lang: str = Query("fr", regex="^(fr|en)$")):
             # 0. Track manipulation — what did the GM want vs what the player chose?
             if gm.strategy_history:
                 prev = gm.strategy_history[-1]
-                desired = prev.desired_pick or "fake"
+                desired = prev.desired_pick_str or "fake"
                 tactic = prev.manipulation_tactic or ""
             else:
                 desired = "fake"

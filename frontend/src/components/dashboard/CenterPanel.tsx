@@ -104,7 +104,7 @@ const CenterPanel = ({ visibleLines, activeDebateIndex, gmTerminal }: CenterPane
 
               {selectedMission.articleText.split('\n\n').map((paragraph, i) => (
                 <p key={i} className="text-soviet-black/85 text-[13px] leading-relaxed tracking-wide"
-                  style={{ fontFamily: "'Courier New', Courier, monospace", animation: `fade-in-up 0.3s ease-out ${i * 0.05}s both` }}>
+                  style={{ animation: `fade-in-up 0.3s ease-out ${i * 0.05}s both` }}>
                   {paragraph}
                 </p>
               ))}
@@ -208,9 +208,7 @@ const CenterPanel = ({ visibleLines, activeDebateIndex, gmTerminal }: CenterPane
                     isMistralski ? "text-foreground/90 italic font-heading"
                     : isSystem ? "text-soviet-red/80 font-heading font-bold"
                     : "text-foreground/85"
-                  }`}
-                    style={{ fontFamily: isMistralski || isSystem ? undefined : "'Courier New', Courier, monospace" }}
-                  >
+                  }`}>
                     {isSystem ? "⚠️ " : line.type === "attack" ? "⚔ " : line.type === "defense" ? "◆ " : ""}
                     {line.message}
                   </div>
