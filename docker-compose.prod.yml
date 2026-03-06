@@ -1,0 +1,57 @@
+# GORAFI SIMULATOR — Production deployment
+# Usage: docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+
+services:
+  nats:
+    image: nats:latest
+    container_name: gorafi-nats
+    networks:
+      - gorafi_net
+    restart: unless-stopped
+
+  relay:
+    build: ./backend-relay
+    container_name: gorafi-relay
+    ports:
+      - "127.0.0.1:8001:8001"
+    environment:
+      NATS_URL: nats://nats:4222
+      GM_BASE_URL: http://gm:8899
+    depends_on:
+      - nats
+    networks:
+      - gorafi_net
+    restart: unless-stopped
+
+  gm:
+    build: .
+    container_name: gorafi-gm
+    ports:
+      - "127.0.0.1:8899:8899"
+    environment:
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY}
+      WH26_BASE_URL: http://relay:8001
+      WH26_WS_URL: ws://relay:8001
+    depends_on:
+      - relay
+    networks:
+      - gorafi_net
+    restart: unless-stopped
+
+  swarm:
+    build: ./swarm
+    container_name: gorafi-swarm
+    command: ["--dir", "/app", "--nats-url", "nats://nats:4222"]
+    environment:
+      MISTRAL_URL: ${MISTRAL_URL:-http://51.159.173.147:8000}
+      MISTRAL_MODEL: ${MISTRAL_MODEL:-mistralai/Mistral-Small-3.2-24B-Instruct-2503}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY}
+    depends_on:
+      - nats
+    networks:
+      - gorafi_net
+    restart: unless-stopped
+
+networks:
+  gorafi_net:
+    driver: bridge

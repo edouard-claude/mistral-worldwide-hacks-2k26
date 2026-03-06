@@ -2,6 +2,7 @@ _bmad*
 .claude
 .DS_Store
 .env
+.env.prod
 .fak
 swarm/fakenews-arena
 monitoring-sessions/data
