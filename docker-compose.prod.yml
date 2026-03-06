@@ -24,7 +24,7 @@ services:
     restart: unless-stopped
 
   gm:
-    build: .
+    build: ./mistralski
     container_name: gorafi-gm
     ports:
       - "127.0.0.1:8899:8899"
